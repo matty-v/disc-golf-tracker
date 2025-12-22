@@ -1,0 +1,6 @@
+This is a placeholder. Replace this file with a 192x192 PNG icon.
+
+You can generate icons from the icon.svg file using:
+1. An online SVG to PNG converter
+2. ImageMagick: convert -resize 192x192 icon.svg icon-192.png
+3. Inkscape: inkscape icon.svg --export-filename=icon-192.png -w 192 -h 192

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2d5a27">
+    <meta name="description" content="Track your disc golf rounds with detailed scoring, approach shots, and putts. View historical statistics for each hole.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Disc Golf">
+
+    <title>Disc Golf Tracker</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="app-header" class="header">
+            <div class="header-left">
+                <button id="back-btn" class="btn-icon hidden" aria-label="Go back">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                </button>
+            </div>
+            <h1 id="header-title" class="header-title">Disc Golf Tracker</h1>
+            <div class="header-right">
+                <div id="sync-status" class="sync-status hidden" title="Sync status">
+                    <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                    </svg>
+                </div>
+                <button id="auth-btn" class="btn-icon" aria-label="Account">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="main-content" role="main">
+            <!-- Home Screen -->
+            <div id="screen-home" class="screen active">
+                <div class="home-container">
+                    <div class="logo-section">
+                        <div class="app-logo">
+                            <svg viewBox="0 0 100 100" width="80" height="80">
+                                <circle cx="50" cy="50" r="45" fill="#2d5a27" stroke="#1a3a17" stroke-width="3"/>
+                                <ellipse cx="50" cy="50" rx="35" ry="35" fill="none" stroke="#fff" stroke-width="2" opacity="0.3"/>
+                                <ellipse cx="50" cy="50" rx="25" ry="25" fill="none" stroke="#fff" stroke-width="2" opacity="0.4"/>
+                                <ellipse cx="50" cy="50" rx="15" ry="15" fill="none" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                                <circle cx="50" cy="50" r="5" fill="#fff"/>
+                            </svg>
+                        </div>
+                        <h2>Disc Golf Tracker</h2>
+                        <p class="tagline">Track your rounds. Improve your game.</p>
+                    </div>
+
+                    <div id="auth-section" class="auth-section">
+                        <button id="sign-in-btn" class="btn btn-primary btn-large">
+                            <svg viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                            </svg>
+                            Sign in with Google
+                        </button>
+                        <p class="auth-note">Sign in to sync your data with Google Sheets</p>
+                    </div>
+
+                    <div id="main-actions" class="main-actions hidden" role="group" aria-label="Main actions">
+                        <button id="new-round-btn" class="btn btn-primary btn-large" aria-label="Start a new round">
+                            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            New Round
+                        </button>
+
+                        <button id="resume-round-btn" class="btn btn-secondary btn-large hidden" aria-label="Resume incomplete round">
+                            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                <path fill="currentColor" d="M8 5v14l11-7z"/>
+                            </svg>
+                            Resume Round
+                        </button>
+                    </div>
+
+                    <div id="offline-indicator" class="offline-indicator hidden">
+                        <svg viewBox="0 0 24 24" width="16" height="16">
+                            <path fill="currentColor" d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7L12 21.5l3.07-3.94 4.01 4.01 1.27-1.27-3.31-3.08z"/>
+                        </svg>
+                        Offline Mode
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course Selection Screen -->
+            <div id="screen-course-select" class="screen">
+                <div class="screen-content">
+                    <div class="course-select-header">
+                        <h2>Select Course</h2>
+                        <p>Choose an existing course or create a new one</p>
+                    </div>
+
+                    <button id="create-course-btn" class="btn btn-outline course-card create-course-card" aria-label="Create a new course">
+                        <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+                            <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        <span>Create New Course</span>
+                    </button>
+
+                    <div id="course-list" class="course-list" role="list" aria-label="Available courses">
+                        <!-- Course cards will be dynamically inserted here -->
+                    </div>
+
+                    <div id="no-courses-message" class="empty-state hidden">
+                        <p>No courses yet. Create your first course to get started!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Course Screen -->
+            <div id="screen-new-course" class="screen">
+                <div class="screen-content">
+                    <h2>Create New Course</h2>
+
+                    <form id="new-course-form" class="form">
+                        <div class="form-group">
+                            <label for="course-name">Course Name</label>
+                            <input type="text" id="course-name" name="course-name"
+                                   placeholder="e.g., Morley Field"
+                                   maxlength="100" required
+                                   autocomplete="off">
+                            <span class="error-message" id="course-name-error"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="hole-count">Number of Holes</label>
+                            <div class="number-input-group" role="group" aria-label="Hole count stepper">
+                                <button type="button" class="btn-stepper" data-action="decrement" data-target="hole-count" aria-label="Decrease hole count">-</button>
+                                <input type="number" id="hole-count" name="hole-count"
+                                       value="18" min="1" max="27" required aria-describedby="hole-count-error">
+                                <button type="button" class="btn-stepper" data-action="increment" data-target="hole-count" aria-label="Increase hole count">+</button>
+                            </div>
+                            <span class="error-message" id="hole-count-error" role="alert"></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-large">Start Round</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Hole Scoring Screen -->
+            <div id="screen-scoring" class="screen">
+                <div class="screen-content scoring-screen">
+                    <!-- Hole Navigation -->
+                    <nav class="hole-nav" role="navigation" aria-label="Hole navigation">
+                        <button id="prev-hole-btn" class="btn-icon" aria-label="Go to previous hole" disabled>
+                            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                <path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                            </svg>
+                        </button>
+                        <div class="hole-indicator" aria-live="polite" aria-atomic="true">
+                            <span id="current-hole-label">Hole 1</span>
+                            <span id="hole-count-label">of 18</span>
+                        </div>
+                        <button id="next-hole-btn" class="btn-icon" aria-label="Go to next hole">
+                            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                <path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                            </svg>
+                        </button>
+                    </nav>
+
+                    <!-- Hole Info (for existing courses) -->
+                    <div id="hole-info" class="hole-info hidden">
+                        <div class="info-chip">
+                            <span class="info-label">Par</span>
+                            <span id="hole-par-display" class="info-value">3</span>
+                        </div>
+                        <div class="info-chip" id="distance-chip">
+                            <span class="info-label">Distance</span>
+                            <span id="hole-distance-display" class="info-value">285 ft</span>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Section (for existing courses with history) -->
+                    <section id="stats-section" class="stats-section hidden" aria-label="Your hole statistics">
+                        <h3>Your Averages</h3>
+                        <div class="stats-grid" role="group" aria-label="Average statistics">
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-score-label">Score</span>
+                                <span id="avg-score" class="stat-value" aria-labelledby="avg-score-label">--</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-approaches-label">Approaches</span>
+                                <span id="avg-approaches" class="stat-value" aria-labelledby="avg-approaches-label">--</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-putts-label">Putts</span>
+                                <span id="avg-putts" class="stat-value" aria-labelledby="avg-putts-label">--</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Course Setup Section (for new courses) -->
+                    <section id="hole-setup" class="hole-setup hidden" aria-label="Hole setup">
+                        <h3>Hole Details</h3>
+                        <div class="setup-grid">
+                            <div class="form-group">
+                                <label for="setup-par">Par</label>
+                                <div class="number-input-group" role="group" aria-label="Par stepper">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="setup-par" aria-label="Decrease par">-</button>
+                                    <input type="number" id="setup-par" name="setup-par"
+                                           value="3" min="2" max="6" aria-label="Par value">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="setup-par" aria-label="Increase par">+</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="setup-distance">Distance (ft) <span class="optional">optional</span></label>
+                                <input type="number" id="setup-distance" name="setup-distance"
+                                       placeholder="285" min="0" max="1500" aria-label="Hole distance in feet">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Score Entry Section -->
+                    <section class="score-entry" aria-label="Score entry">
+                        <h3>Your Score</h3>
+                        <div class="score-input-container">
+                            <div class="form-group score-group">
+                                <label for="score-throws">Throws</label>
+                                <div class="number-input-group large" role="group" aria-label="Throws stepper">
+                                    <button type="button" class="btn-stepper large" data-action="decrement" data-target="score-throws" aria-label="Decrease throws">-</button>
+                                    <input type="number" id="score-throws" name="score-throws"
+                                           value="3" min="1" max="20" aria-label="Number of throws" aria-describedby="score-relative">
+                                    <button type="button" class="btn-stepper large" data-action="increment" data-target="score-throws" aria-label="Increase throws">+</button>
+                                </div>
+                                <div id="score-relative" class="score-relative" aria-live="polite" aria-atomic="true">E</div>
+                            </div>
+                        </div>
+
+                        <div class="detail-scores">
+                            <div class="form-group">
+                                <label for="score-approaches">Approaches <span class="optional">optional</span></label>
+                                <div class="number-input-group" role="group" aria-label="Approaches stepper">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-approaches" aria-label="Decrease approaches">-</button>
+                                    <input type="number" id="score-approaches" name="score-approaches"
+                                           value="" min="0" max="19" placeholder="0" aria-label="Number of approach shots">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-approaches" aria-label="Increase approaches">+</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="score-putts">Putts <span class="optional">optional</span></label>
+                                <div class="number-input-group" role="group" aria-label="Putts stepper">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-putts" aria-label="Decrease putts">-</button>
+                                    <input type="number" id="score-putts" name="score-putts"
+                                           value="" min="0" max="19" placeholder="0" aria-label="Number of putts">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-putts" aria-label="Increase putts">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="validation-warning" class="validation-warning hidden" role="alert" aria-live="polite">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                            </svg>
+                            <span id="validation-message"></span>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Fixed Bottom Action -->
+                <div class="bottom-action">
+                    <button id="save-hole-btn" class="btn btn-primary btn-large" aria-label="Save score and go to next hole">
+                        Next Hole
+                        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                            <path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Round Summary Screen -->
+            <div id="screen-summary" class="screen">
+                <div class="screen-content">
+                    <div class="summary-header">
+                        <div class="check-icon">
+                            <svg viewBox="0 0 24 24" width="48" height="48">
+                                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                        </div>
+                        <h2>Round Complete!</h2>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-course-name" id="summary-course"></div>
+                        <div class="summary-date" id="summary-date"></div>
+
+                        <div class="summary-score">
+                            <div class="total-score" id="summary-total-score">62</div>
+                            <div class="relative-score" id="summary-relative-score">+8</div>
+                        </div>
+
+                        <div class="summary-details">
+                            <div class="summary-detail">
+                                <span class="detail-label">Holes Played</span>
+                                <span class="detail-value" id="summary-holes">18</span>
+                            </div>
+                            <div class="summary-detail">
+                                <span class="detail-label">Total Par</span>
+                                <span class="detail-value" id="summary-par">54</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="summary-comparison" class="summary-comparison hidden">
+                        <h3>Compared to Average</h3>
+                        <div class="comparison-result" id="comparison-result"></div>
+                    </div>
+
+                    <div id="summary-highlights" class="summary-highlights hidden">
+                        <div class="highlight-section">
+                            <h4>Best Holes</h4>
+                            <div id="best-holes" class="highlight-list"></div>
+                        </div>
+                        <div class="highlight-section">
+                            <h4>Needs Work</h4>
+                            <div id="worst-holes" class="highlight-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-actions">
+                        <button id="view-scorecard-btn" class="btn btn-outline">View Scorecard</button>
+                        <button id="finish-round-btn" class="btn btn-primary btn-large">Save & Finish</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scorecard Modal -->
+            <div id="scorecard-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scorecard-modal-title">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="scorecard-modal-title">Scorecard</h2>
+                        <button id="close-scorecard-btn" class="btn-icon" aria-label="Close scorecard">
+                            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                                <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <table id="scorecard-table" class="scorecard-table">
+                            <thead>
+                                <tr>
+                                    <th>Hole</th>
+                                    <th>Par</th>
+                                    <th>Score</th>
+                                    <th>+/-</th>
+                                    <th>App</th>
+                                    <th>Putts</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scorecard-body">
+                                <!-- Rows will be dynamically inserted -->
+                            </tbody>
+                            <tfoot id="scorecard-footer">
+                                <!-- Totals will be dynamically inserted -->
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Incomplete Round Modal -->
+            <div id="incomplete-round-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="incomplete-round-title" aria-describedby="incomplete-round-message">
+                <div class="modal-content modal-small">
+                    <h2 id="incomplete-round-title">Incomplete Round</h2>
+                    <p id="incomplete-round-message">You have an incomplete round. Would you like to continue or start a new round?</p>
+                    <div class="modal-actions">
+                        <button id="continue-round-btn" class="btn btn-primary" aria-label="Continue the incomplete round">Continue Round</button>
+                        <button id="abandon-round-btn" class="btn btn-outline btn-danger" aria-label="Abandon the incomplete round and start a new one">Abandon & Start New</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden" role="alert" aria-live="assertive" aria-busy="true">
+            <div class="spinner" aria-hidden="true"></div>
+            <p id="loading-message">Loading...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+    </div>
+
+    <!-- Google API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+
+    <!-- Application Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/sheets-api.js"></script>
+    <script src="js/statistics.js"></script>
+    <script src="js/app.js"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

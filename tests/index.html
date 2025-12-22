@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disc Golf Tracker - Test Suite</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #4ade80;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+        }
+
+        .test-output {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .pass {
+            color: #4ade80;
+        }
+
+        .fail {
+            color: #f87171;
+        }
+
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .summary.success {
+            background: #064e3b;
+            color: #4ade80;
+        }
+
+        .summary.failure {
+            background: #7f1d1d;
+            color: #f87171;
+        }
+
+        .run-btn {
+            background: #4ade80;
+            color: #1a1a2e;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .run-btn:hover {
+            background: #22c55e;
+        }
+
+        .run-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .error-details {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2d1f1f;
+            border-radius: 8px;
+            border-left: 4px solid #f87171;
+        }
+
+        .error-details h3 {
+            color: #f87171;
+            margin-bottom: 10px;
+        }
+
+        .error-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 4px;
+        }
+
+        .error-item .test-name {
+            color: #fbbf24;
+            font-weight: bold;
+        }
+
+        .error-item .error-msg {
+            color: #f87171;
+            margin-top: 5px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Disc Golf Tracker - Test Suite</h1>
+
+    <button id="run-btn" class="run-btn">Run All Tests</button>
+
+    <div id="output" class="test-output">Click "Run All Tests" to execute the test suite.</div>
+
+    <div id="summary" class="summary" style="display: none;"></div>
+
+    <div id="errors" class="error-details" style="display: none;">
+        <h3>Failed Tests</h3>
+        <div id="error-list"></div>
+    </div>
+
+    <!-- Load application dependencies first -->
+    <script src="../js/config.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/statistics.js"></script>
+
+    <!-- Load test framework -->
+    <script src="test-runner.js"></script>
+
+    <!-- Load test files -->
+    <script src="utils.test.js"></script>
+    <script src="statistics.test.js"></script>
+    <script src="validation.test.js"></script>
+
+    <script>
+        const output = document.getElementById('output');
+        const summary = document.getElementById('summary');
+        const errors = document.getElementById('errors');
+        const errorList = document.getElementById('error-list');
+        const runBtn = document.getElementById('run-btn');
+
+        // Override console.log to capture test output
+        const originalLog = console.log;
+        let logBuffer = [];
+
+        function captureLog(...args) {
+            const message = args.join(' ');
+            logBuffer.push(message);
+            originalLog.apply(console, args);
+        }
+
+        async function runTests() {
+            runBtn.disabled = true;
+            runBtn.textContent = 'Running...';
+            logBuffer = [];
+            output.innerHTML = '';
+            summary.style.display = 'none';
+            errors.style.display = 'none';
+            errorList.innerHTML = '';
+
+            console.log = captureLog;
+
+            try {
+                const results = await TestRunner.run();
+
+                // Display output
+                output.innerHTML = logBuffer.map(line => {
+                    if (line.includes('PASS:')) {
+                        return `<span class="pass">${escapeHtml(line)}</span>`;
+                    } else if (line.includes('FAIL:')) {
+                        return `<span class="fail">${escapeHtml(line)}</span>`;
+                    }
+                    return escapeHtml(line);
+                }).join('\n');
+
+                // Display summary
+                summary.style.display = 'block';
+                if (results.failed === 0) {
+                    summary.className = 'summary success';
+                    summary.textContent = `All ${results.passed} tests passed!`;
+                } else {
+                    summary.className = 'summary failure';
+                    summary.textContent = `${results.failed} of ${results.passed + results.failed} tests failed`;
+
+                    // Display error details
+                    errors.style.display = 'block';
+                    results.errors.forEach(err => {
+                        const item = document.createElement('div');
+                        item.className = 'error-item';
+                        item.innerHTML = `
+                            <div class="test-name">${escapeHtml(err.name)}</div>
+                            <div class="error-msg">${escapeHtml(err.error)}</div>
+                        `;
+                        errorList.appendChild(item);
+                    });
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="fail">Error running tests: ${escapeHtml(error.message)}</span>`;
+            } finally {
+                console.log = originalLog;
+                runBtn.disabled = false;
+                runBtn.textContent = 'Run All Tests';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        runBtn.addEventListener('click', runTests);
+
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 100);
+        });
+    </script>
+</body>
+</html>
