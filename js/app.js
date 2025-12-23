@@ -66,6 +66,11 @@ const App = {
             this.updateAuthUI();
 
             Utils.hideLoading();
+
+            // Check for hash-based navigation (e.g., #privacy, #terms)
+            // Must run after hideLoading to ensure UI is ready
+            this.handleHashNavigation();
+
             console.log('App initialized successfully');
         } catch (error) {
             console.error('Initialization error:', error);
@@ -281,7 +286,40 @@ const App = {
                 Utils.setHeaderTitle('Round Summary');
                 Utils.showBackButton(false);
                 break;
+            case 'terms':
+                Utils.setHeaderTitle('Terms of Service');
+                Utils.showBackButton(true);
+                break;
+            case 'privacy':
+                Utils.setHeaderTitle('Privacy Policy');
+                Utils.showBackButton(true);
+                break;
         }
+    },
+
+    /**
+     * Handle hash-based navigation (e.g., #privacy, #terms)
+     */
+    handleHashNavigation() {
+        const hash = window.location.hash.slice(1); // Remove the '#'
+        const validScreens = ['privacy', 'terms'];
+
+        if (hash && validScreens.includes(hash)) {
+            // Use setTimeout to ensure DOM is fully ready
+            setTimeout(() => {
+                this.showScreen(hash);
+            }, 0);
+        }
+
+        // Listen for hash changes
+        window.addEventListener('hashchange', () => {
+            const newHash = window.location.hash.slice(1);
+            if (newHash && validScreens.includes(newHash)) {
+                this.showScreen(newHash);
+            } else if (!newHash) {
+                this.showScreen('home');
+            }
+        });
     },
 
     /**
@@ -291,6 +329,8 @@ const App = {
         switch (this.state.currentScreen) {
             case 'course-select':
             case 'new-course':
+            case 'terms':
+            case 'privacy':
                 this.showScreen('home');
                 break;
             case 'scoring':

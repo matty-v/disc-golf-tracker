@@ -6,9 +6,9 @@
  * for API calls.
  */
 
-const CACHE_NAME = 'disc-golf-tracker-v1';
-const STATIC_CACHE_NAME = 'disc-golf-static-v1';
-const DATA_CACHE_NAME = 'disc-golf-data-v1';
+const CACHE_NAME = 'disc-golf-tracker-v5';
+const STATIC_CACHE_NAME = 'disc-golf-static-v5';
+const DATA_CACHE_NAME = 'disc-golf-data-v5';
 
 // Files to cache for offline use (relative paths for GCS deployment)
 const STATIC_FILES = [
