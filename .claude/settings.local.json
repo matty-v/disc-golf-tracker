@@ -4,7 +4,14 @@
       "Bash(node --check:*)",
       "Bash(node tests/run-tests.js:*)",
       "Bash(node:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(file:*)",
+      "Bash(xxd:*)",
+      "Bash(python3:*)",
+      "Bash(chmod:*)",
+      "Bash(/Users/matt.voget/Dev/sandbox/disc-golf/scripts/deploy-gcs.sh:*)",
+      "Bash(gcloud projects:*)",
+      "Bash(gcloud config set:*)"
     ]
   }
 }

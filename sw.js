@@ -10,20 +10,20 @@ const CACHE_NAME = 'disc-golf-tracker-v1';
 const STATIC_CACHE_NAME = 'disc-golf-static-v1';
 const DATA_CACHE_NAME = 'disc-golf-data-v1';
 
-// Files to cache for offline use
+// Files to cache for offline use (relative paths for GCS deployment)
 const STATIC_FILES = [
-    '/',
-    '/index.html',
-    '/css/styles.css',
-    '/js/config.js',
-    '/js/utils.js',
-    '/js/storage.js',
-    '/js/sheets-api.js',
-    '/js/statistics.js',
-    '/js/app.js',
-    '/manifest.json',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png'
+    './',
+    './index.html',
+    './css/styles.css',
+    './js/config.js',
+    './js/utils.js',
+    './js/storage.js',
+    './js/sheets-api.js',
+    './js/statistics.js',
+    './js/app.js',
+    './manifest.json',
+    './icons/icon-192.png',
+    './icons/icon-512.png'
 ];
 
 // External resources that should be cached
