@@ -1007,8 +1007,8 @@ const App = {
             hole_id: hole.hole_id,
             hole_number: holeIndex + 1,
             throws: throws,
-            approaches: approaches ? parseInt(approaches, 10) : null,
-            putts: putts ? parseInt(putts, 10) : null,
+            approaches: approaches ? parseInt(approaches, 10) : 0,
+            putts: putts ? parseInt(putts, 10) : 0,
             created_at: Utils.formatDateForStorage()
         };
 
