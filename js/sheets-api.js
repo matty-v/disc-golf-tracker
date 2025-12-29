@@ -1,347 +1,249 @@
 /**
- * Disc Golf Tracker - Google Sheets API Module
+ * Disc Golf Tracker - Sheets DB API Client
  *
- * Handles all interactions with the Google Sheets API including
- * authentication, reading, and writing data.
+ * Handles all interactions with the sheets-db-api backend service.
+ * Uses service account authentication via the backend.
  */
 
 const SheetsAPI = {
-    // Track initialization state
-    initialized: false,
-    tokenClient: null,
-    accessToken: null,
-    tokenExpiry: null,
+    // Spreadsheet ID (set after user connects)
+    spreadsheetId: null,
 
-    // Storage keys for auth persistence
-    AUTH_STORAGE_KEYS: {
-        accessToken: 'dgtracker_access_token',
-        tokenExpiry: 'dgtracker_token_expiry'
+    /**
+     * Set the spreadsheet ID for API calls
+     * @param {string} id - The Google Spreadsheet ID
+     */
+    setSpreadsheetId(id) {
+        this.spreadsheetId = id;
     },
 
     /**
-     * Initialize the Google API client
-     * @returns {Promise} Resolves when initialized
+     * Get the current spreadsheet ID
+     * @returns {string|null} The spreadsheet ID
      */
-    async init() {
-        return new Promise((resolve, reject) => {
-            gapi.load('client', async () => {
-                try {
-                    await gapi.client.init({
-                        discoveryDocs: CONFIG.google.discoveryDocs,
-                    });
-                    this.initialized = true;
-                    console.log('Google API client initialized');
-                    resolve();
-                } catch (error) {
-                    console.error('Error initializing Google API:', error);
-                    reject(error);
-                }
-            });
-        });
+    getSpreadsheetId() {
+        return this.spreadsheetId;
     },
 
     /**
-     * Initialize the Google Identity Services token client
+     * Check if API is configured with a spreadsheet ID
+     * @returns {boolean} Whether configured
      */
-    initTokenClient() {
-        this.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CONFIG.google.clientId,
-            scope: CONFIG.google.scopes,
-            callback: (response) => {
-                if (response.access_token) {
-                    this.accessToken = response.access_token;
-                    // Calculate token expiry (expires_in is in seconds)
-                    const expiryTime = Date.now() + (response.expires_in * 1000);
-                    this.tokenExpiry = expiryTime;
-                    gapi.client.setToken({ access_token: response.access_token });
-                    // Persist the token
-                    this.persistToken(response.access_token, expiryTime);
-                }
-            },
-        });
+    isConfigured() {
+        return !!this.spreadsheetId;
     },
 
-    /**
-     * Persist authentication token to storage
-     * @param {string} token - The access token
-     * @param {number} expiry - Token expiry timestamp in milliseconds
-     */
-    persistToken(token, expiry) {
-        try {
-            sessionStorage.setItem(this.AUTH_STORAGE_KEYS.accessToken, token);
-            sessionStorage.setItem(this.AUTH_STORAGE_KEYS.tokenExpiry, expiry.toString());
-        } catch (error) {
-            console.warn('Failed to persist auth token:', error);
-        }
-    },
+    // ===================
+    // Core API Methods
+    // ===================
 
     /**
-     * Clear persisted authentication tokens
+     * Make an API request to sheets-db-api
+     * @param {string} path - API path
+     * @param {Object} options - Fetch options
+     * @returns {Promise<any>} Response data
      */
-    clearPersistedToken() {
-        try {
-            sessionStorage.removeItem(this.AUTH_STORAGE_KEYS.accessToken);
-            sessionStorage.removeItem(this.AUTH_STORAGE_KEYS.tokenExpiry);
-        } catch (error) {
-            console.warn('Failed to clear persisted token:', error);
-        }
-    },
+    async request(path, options = {}) {
+        const url = `${CONFIG.api.baseUrl}${path}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Spreadsheet-Id': this.spreadsheetId,
+            ...options.headers
+        };
 
-    /**
-     * Check if a token is expired or about to expire (within 5 minutes)
-     * @param {number} expiry - Token expiry timestamp in milliseconds
-     * @returns {boolean} Whether the token is expired or expiring soon
-     */
-    isTokenExpired(expiry) {
-        if (!expiry) return true;
-        // Consider expired if within 5 minutes of expiry
-        const bufferTime = 5 * 60 * 1000; // 5 minutes
-        return Date.now() >= (expiry - bufferTime);
-    },
+        const response = await fetch(url, { ...options, headers });
 
-    /**
-     * Try to restore session from stored token
-     * @returns {Promise<boolean>} Whether session was successfully restored
-     */
-    async tryRestoreSession() {
-        try {
-            const storedToken = sessionStorage.getItem(this.AUTH_STORAGE_KEYS.accessToken);
-            const storedExpiry = sessionStorage.getItem(this.AUTH_STORAGE_KEYS.tokenExpiry);
-
-            if (!storedToken || !storedExpiry) {
-                return false;
-            }
-
-            const expiry = parseInt(storedExpiry, 10);
-
-            // Check if token is still valid
-            if (this.isTokenExpired(expiry)) {
-                console.log('Stored token has expired, clearing...');
-                this.clearPersistedToken();
-                return false;
-            }
-
-            // Token is valid, restore the session
-            this.accessToken = storedToken;
-            this.tokenExpiry = expiry;
-            gapi.client.setToken({ access_token: storedToken });
-
-            // Verify the token is still valid by making a test request
+        if (!response.ok) {
+            let errorData;
             try {
-                await this.getUserInfo();
-                console.log('Session restored successfully');
-                return true;
-            } catch (error) {
-                console.log('Stored token is invalid, clearing...');
-                this.clearPersistedToken();
-                this.accessToken = null;
-                this.tokenExpiry = null;
-                gapi.client.setToken(null);
-                return false;
+                errorData = await response.json();
+            } catch {
+                errorData = await response.text();
             }
-        } catch (error) {
-            console.warn('Failed to restore session:', error);
-            return false;
+            const message = typeof errorData === 'object' && errorData?.error
+                ? errorData.error
+                : `Request failed with status ${response.status}`;
+            throw new Error(message);
         }
-    },
 
-    /**
-     * Check if user is signed in
-     * @returns {boolean} Sign-in status
-     */
-    isSignedIn() {
-        return !!this.accessToken;
-    },
-
-    /**
-     * Sign in the user
-     * @returns {Promise} Resolves with user info
-     */
-    async signIn() {
-        return new Promise((resolve, reject) => {
-            if (!this.tokenClient) {
-                this.initTokenClient();
-            }
-
-            this.tokenClient.callback = async (response) => {
-                if (response.error) {
-                    reject(response);
-                    return;
-                }
-
-                this.accessToken = response.access_token;
-                gapi.client.setToken({ access_token: response.access_token });
-
-                try {
-                    // Get user info
-                    const userInfo = await this.getUserInfo();
-                    Storage.setUserInfo(userInfo);
-                    resolve(userInfo);
-                } catch (error) {
-                    reject(error);
-                }
-            };
-
-            this.tokenClient.requestAccessToken({ prompt: 'consent' });
-        });
-    },
-
-    /**
-     * Sign out the user
-     */
-    signOut() {
-        if (this.accessToken) {
-            google.accounts.oauth2.revoke(this.accessToken);
-            this.accessToken = null;
-            this.tokenExpiry = null;
-            gapi.client.setToken(null);
-            Storage.clearUserInfo();
-            this.clearPersistedToken();
-        }
-    },
-
-    /**
-     * Get user info from Google
-     * @returns {Promise<Object>} User info
-     */
-    async getUserInfo() {
-        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: {
-                Authorization: `Bearer ${this.accessToken}`
-            }
-        });
+        if (response.status === 204) return undefined;
         return response.json();
     },
 
-    // ===================
-    // Spreadsheet Operations
-    // ===================
-
     /**
-     * Get or create the user's spreadsheet
-     * @returns {Promise<string>} Spreadsheet ID
+     * Check API health
+     * @returns {Promise<{status: string}>} Health status
      */
-    async getOrCreateSpreadsheet() {
-        let spreadsheetId = Storage.getSpreadsheetId();
-
-        if (spreadsheetId) {
-            // Verify the spreadsheet still exists and is accessible
-            try {
-                await gapi.client.sheets.spreadsheets.get({
-                    spreadsheetId: spreadsheetId
-                });
-                return spreadsheetId;
-            } catch (error) {
-                // Spreadsheet not found or not accessible, create a new one
-                console.log('Stored spreadsheet not accessible, creating new one');
-                Storage.remove(CONFIG.storageKeys.spreadsheetId);
-            }
+    async health() {
+        const response = await fetch(`${CONFIG.api.baseUrl}/health`);
+        if (!response.ok) {
+            throw new Error('API health check failed');
         }
-
-        // Create new spreadsheet
-        spreadsheetId = await this.createSpreadsheet();
-        Storage.setSpreadsheetId(spreadsheetId);
-        return spreadsheetId;
+        return response.json();
     },
 
     /**
-     * Create a new spreadsheet with all required sheets
-     * @returns {Promise<string>} New spreadsheet ID
+     * List all sheets in the spreadsheet
+     * @returns {Promise<Array>} Array of sheet info
      */
-    async createSpreadsheet() {
-        const response = await gapi.client.sheets.spreadsheets.create({
-            properties: {
-                title: CONFIG.google.spreadsheetTitle
-            },
-            sheets: [
-                {
-                    properties: { title: CONFIG.sheets.courses }
-                },
-                {
-                    properties: { title: CONFIG.sheets.holes }
-                },
-                {
-                    properties: { title: CONFIG.sheets.rounds }
-                },
-                {
-                    properties: { title: CONFIG.sheets.scores }
-                }
-            ]
-        });
-
-        const spreadsheetId = response.result.spreadsheetId;
-
-        // Add headers to each sheet
-        await this.addHeaders(spreadsheetId);
-
-        return spreadsheetId;
+    async listSheets() {
+        const result = await this.request('/sheets');
+        return result?.sheets || [];
     },
 
     /**
-     * Add headers to all sheets
-     * @param {string} spreadsheetId - The spreadsheet ID
+     * Create a new sheet
+     * @param {string} name - Sheet name
+     * @returns {Promise<void>}
      */
-    async addHeaders(spreadsheetId) {
-        const requests = Object.keys(CONFIG.sheets).map(key => ({
-            range: `${CONFIG.sheets[key]}!A1`,
-            values: [CONFIG.sheetHeaders[key]]
-        }));
-
-        await gapi.client.sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: spreadsheetId,
-            resource: {
-                data: requests,
-                valueInputOption: 'RAW'
-            }
+    async createSheet(name) {
+        await this.request('/sheets', {
+            method: 'POST',
+            body: JSON.stringify({ name })
         });
     },
 
-    // ===================
-    // Read Operations
-    // ===================
-
     /**
-     * Read all data from a sheet
-     * @param {string} sheetName - The sheet name
+     * Get all rows from a sheet
+     * @param {string} sheetName - Sheet name
      * @returns {Promise<Array>} Array of row objects
      */
-    async readSheet(sheetName) {
-        const spreadsheetId = await this.getOrCreateSpreadsheet();
+    async getRows(sheetName) {
+        const result = await this.request(`/sheets/${encodeURIComponent(sheetName)}/rows`);
+        return result?.rows || [];
+    },
 
-        try {
-            const response = await gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetId,
-                range: `${sheetName}!A:Z`
+    /**
+     * Create a new row in a sheet
+     * @param {string} sheetName - Sheet name
+     * @param {Object} data - Row data
+     * @returns {Promise<{rowIndex: number}>} Created row info
+     */
+    async createRow(sheetName, data) {
+        return this.request(`/sheets/${encodeURIComponent(sheetName)}/rows`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    },
+
+    /**
+     * Update a row in a sheet
+     * @param {string} sheetName - Sheet name
+     * @param {number} rowIndex - Row index (1-based, data starts at 2)
+     * @param {Object} data - Row data
+     * @returns {Promise<void>}
+     */
+    async updateRow(sheetName, rowIndex, data) {
+        await this.request(`/sheets/${encodeURIComponent(sheetName)}/rows/${rowIndex}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    },
+
+    /**
+     * Delete a row from a sheet
+     * @param {string} sheetName - Sheet name
+     * @param {number} rowIndex - Row index (1-based, data starts at 2)
+     * @returns {Promise<void>}
+     */
+    async deleteRow(sheetName, rowIndex) {
+        await this.request(`/sheets/${encodeURIComponent(sheetName)}/rows/${rowIndex}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // ===================
+    // Sheet Initialization
+    // ===================
+
+    /**
+     * Initialize required sheets with headers
+     * @returns {Promise<{success: boolean, created: string[], initialized: string[]}>}
+     */
+    async initializeSheets() {
+        const existingSheets = await this.listSheets();
+
+        // Build a map of existing sheet names (case-insensitive lookup)
+        // API returns 'title' for sheet names
+        const existingSheetMap = {};
+        existingSheets
+            .filter(s => s && (s.title || s.name))
+            .forEach(s => {
+                const sheetName = s.title || s.name;
+                existingSheetMap[sheetName.toLowerCase()] = sheetName;
             });
 
-            const values = response.result.values || [];
-            if (values.length <= 1) {
-                return []; // Only headers or empty
+        const created = [];
+        const initialized = [];
+
+        const requiredSheets = [
+            { name: CONFIG.sheets.courses, headers: CONFIG.sheetHeaders.courses },
+            { name: CONFIG.sheets.holes, headers: CONFIG.sheetHeaders.holes },
+            { name: CONFIG.sheets.rounds, headers: CONFIG.sheetHeaders.rounds },
+            { name: CONFIG.sheets.scores, headers: CONFIG.sheetHeaders.scores }
+        ];
+
+        for (const sheet of requiredSheets) {
+            const sheetNameLower = sheet.name.toLowerCase();
+            const existingName = existingSheetMap[sheetNameLower];
+
+            // Use the existing sheet name if it exists (preserves original casing)
+            const actualSheetName = existingName || sheet.name;
+
+            if (!existingName) {
+                // Sheet doesn't exist - create it
+                await this.createSheet(sheet.name);
+                created.push(sheet.name);
+
+                // New sheet needs headers initialized
+                await this.initializeSheetHeaders(sheet.name, sheet.headers);
+                initialized.push(sheet.name);
+            } else {
+                // Sheet exists - check if it needs headers initialized
+                const rows = await this.getRows(actualSheetName);
+
+                if (rows.length === 0) {
+                    // Empty sheet - initialize headers
+                    await this.initializeSheetHeaders(actualSheetName, sheet.headers);
+                    initialized.push(actualSheetName);
+                }
+                // If sheet has data, assume headers are already set up correctly
             }
+        }
 
-            const headers = values[0];
-            const rows = values.slice(1);
+        return { success: true, created, initialized };
+    },
 
-            return rows.map(row => {
-                const obj = {};
-                headers.forEach((header, index) => {
-                    obj[header] = row[index] || '';
-                });
-                return obj;
-            });
-        } catch (error) {
-            console.error(`Error reading ${sheetName}:`, error);
-            throw error;
+    /**
+     * Initialize headers for a sheet by creating and deleting a placeholder row
+     * @param {string} sheetName - The sheet name
+     * @param {Array<string>} headers - The header field names
+     * @returns {Promise<void>}
+     */
+    async initializeSheetHeaders(sheetName, headers) {
+        const placeholderData = {};
+        headers.forEach(header => {
+            placeholderData[header] = '';
+        });
+
+        const result = await this.createRow(sheetName, placeholderData);
+
+        // Delete the placeholder row
+        if (result && result.rowIndex) {
+            await this.deleteRow(sheetName, result.rowIndex);
         }
     },
+
+    // ===================
+    // High-Level Operations
+    // ===================
 
     /**
      * Load all courses from Google Sheets
      * @returns {Promise<Array>} Array of courses
      */
     async loadCourses() {
-        const courses = await this.readSheet(CONFIG.sheets.courses);
-        // Convert types
+        const courses = await this.getRows(CONFIG.sheets.courses);
         return courses.map(course => ({
             ...course,
             hole_count: parseInt(course.hole_count, 10) || 18
@@ -354,7 +256,7 @@ const SheetsAPI = {
      * @returns {Promise<Array>} Array of holes
      */
     async loadHolesForCourse(courseId) {
-        const allHoles = await this.readSheet(CONFIG.sheets.holes);
+        const allHoles = await this.getRows(CONFIG.sheets.holes);
         return allHoles
             .filter(hole => hole.course_id === courseId)
             .map(hole => ({
@@ -372,7 +274,7 @@ const SheetsAPI = {
      * @returns {Promise<Array>} Array of rounds
      */
     async loadRoundsForCourse(courseId) {
-        const allRounds = await this.readSheet(CONFIG.sheets.rounds);
+        const allRounds = await this.getRows(CONFIG.sheets.rounds);
         return allRounds
             .filter(round => round.course_id === courseId && round.completed === 'TRUE')
             .map(round => ({
@@ -389,7 +291,7 @@ const SheetsAPI = {
      * @returns {Promise<Array>} Array of scores
      */
     async loadScoresForRounds(roundIds) {
-        const allScores = await this.readSheet(CONFIG.sheets.scores);
+        const allScores = await this.getRows(CONFIG.sheets.scores);
         return allScores
             .filter(score => roundIds.includes(score.round_id))
             .map(score => ({
@@ -406,157 +308,35 @@ const SheetsAPI = {
     // ===================
 
     /**
-     * Append a row to a sheet
-     * @param {string} sheetName - The sheet name
-     * @param {Object} data - The data to append
-     * @returns {Promise<boolean>} Success status
-     */
-    async appendRow(sheetName, data) {
-        const spreadsheetId = await this.getOrCreateSpreadsheet();
-        const headers = CONFIG.sheetHeaders[Object.keys(CONFIG.sheets).find(key => CONFIG.sheets[key] === sheetName)];
-
-        const values = [headers.map(header => {
-            const value = data[header];
-            if (value === null || value === undefined) return '';
-            if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-            return String(value);
-        })];
-
-        try {
-            await gapi.client.sheets.spreadsheets.values.append({
-                spreadsheetId: spreadsheetId,
-                range: `${sheetName}!A:Z`,
-                valueInputOption: 'RAW',
-                insertDataOption: 'INSERT_ROWS',
-                resource: { values }
-            });
-            return true;
-        } catch (error) {
-            console.error(`Error appending to ${sheetName}:`, error);
-            throw error;
-        }
-    },
-
-    /**
-     * Append multiple rows to a sheet
-     * @param {string} sheetName - The sheet name
-     * @param {Array<Object>} dataArray - Array of data objects to append
-     * @returns {Promise<boolean>} Success status
-     */
-    async appendRows(sheetName, dataArray) {
-        if (!dataArray || dataArray.length === 0) return true;
-
-        const spreadsheetId = await this.getOrCreateSpreadsheet();
-        const sheetKey = Object.keys(CONFIG.sheets).find(key => CONFIG.sheets[key] === sheetName);
-        const headers = CONFIG.sheetHeaders[sheetKey];
-
-        const values = dataArray.map(data =>
-            headers.map(header => {
-                const value = data[header];
-                if (value === null || value === undefined) return '';
-                if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-                return String(value);
-            })
-        );
-
-        try {
-            await gapi.client.sheets.spreadsheets.values.append({
-                spreadsheetId: spreadsheetId,
-                range: `${sheetName}!A:Z`,
-                valueInputOption: 'RAW',
-                insertDataOption: 'INSERT_ROWS',
-                resource: { values }
-            });
-            return true;
-        } catch (error) {
-            console.error(`Error appending rows to ${sheetName}:`, error);
-            throw error;
-        }
-    },
-
-    /**
-     * Update a row in a sheet by finding and replacing it
-     * @param {string} sheetName - The sheet name
-     * @param {string} idField - The ID field name
-     * @param {string} idValue - The ID value to find
-     * @param {Object} data - The new data
-     * @returns {Promise<boolean>} Success status
-     */
-    async updateRow(sheetName, idField, idValue, data) {
-        const spreadsheetId = await this.getOrCreateSpreadsheet();
-
-        try {
-            // First, find the row
-            const response = await gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetId,
-                range: `${sheetName}!A:Z`
-            });
-
-            const values = response.result.values || [];
-            if (values.length <= 1) return false;
-
-            const headers = values[0];
-            const idIndex = headers.indexOf(idField);
-            if (idIndex === -1) return false;
-
-            // Find the row index
-            let rowIndex = -1;
-            for (let i = 1; i < values.length; i++) {
-                if (values[i][idIndex] === idValue) {
-                    rowIndex = i + 1; // 1-based for Sheets API
-                    break;
-                }
-            }
-
-            if (rowIndex === -1) return false;
-
-            // Update the row
-            const newValues = [headers.map(header => {
-                const value = data[header];
-                if (value === null || value === undefined) return '';
-                if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-                return String(value);
-            })];
-
-            await gapi.client.sheets.spreadsheets.values.update({
-                spreadsheetId: spreadsheetId,
-                range: `${sheetName}!A${rowIndex}`,
-                valueInputOption: 'RAW',
-                resource: { values: newValues }
-            });
-
-            return true;
-        } catch (error) {
-            console.error(`Error updating row in ${sheetName}:`, error);
-            throw error;
-        }
-    },
-
-    /**
      * Save a course to Google Sheets
      * @param {Object} course - The course data
-     * @returns {Promise<boolean>} Success status
+     * @returns {Promise<void>}
      */
     async saveCourse(course) {
-        return this.appendRow(CONFIG.sheets.courses, course);
+        const data = this.prepareRowData(course, CONFIG.sheetHeaders.courses);
+        await this.createRow(CONFIG.sheets.courses, data);
     },
 
     /**
      * Save holes to Google Sheets
      * @param {Array<Object>} holes - Array of hole data
-     * @returns {Promise<boolean>} Success status
+     * @returns {Promise<void>}
      */
     async saveHoles(holes) {
-        return this.appendRows(CONFIG.sheets.holes, holes);
+        for (const hole of holes) {
+            const data = this.prepareRowData(hole, CONFIG.sheetHeaders.holes);
+            await this.createRow(CONFIG.sheets.holes, data);
+        }
     },
 
     /**
      * Save a round to Google Sheets
      * @param {Object} round - The round data
-     * @returns {Promise<boolean>} Success status
+     * @returns {Promise<void>}
      */
     async saveRound(round) {
-        return this.appendRow(CONFIG.sheets.rounds, round);
+        const data = this.prepareRowData(round, CONFIG.sheetHeaders.rounds);
+        await this.createRow(CONFIG.sheets.rounds, data);
     },
 
     /**
@@ -565,16 +345,32 @@ const SheetsAPI = {
      * @returns {Promise<boolean>} Success status
      */
     async updateRound(round) {
-        return this.updateRow(CONFIG.sheets.rounds, 'round_id', round.round_id, round);
+        // Find the row index by round_id
+        const allRounds = await this.getRows(CONFIG.sheets.rounds);
+        const rowIndex = allRounds.findIndex(r => r.round_id === round.round_id);
+
+        if (rowIndex === -1) {
+            console.warn('Round not found for update:', round.round_id);
+            return false;
+        }
+
+        // Row index in API is 1-based, data starts at row 2
+        const apiRowIndex = rowIndex + 2;
+        const data = this.prepareRowData(round, CONFIG.sheetHeaders.rounds);
+        await this.updateRow(CONFIG.sheets.rounds, apiRowIndex, data);
+        return true;
     },
 
     /**
      * Save scores to Google Sheets
      * @param {Array<Object>} scores - Array of score data
-     * @returns {Promise<boolean>} Success status
+     * @returns {Promise<void>}
      */
     async saveScores(scores) {
-        return this.appendRows(CONFIG.sheets.scores, scores);
+        for (const score of scores) {
+            const data = this.prepareRowData(score, CONFIG.sheetHeaders.scores);
+            await this.createRow(CONFIG.sheets.scores, data);
+        }
     },
 
     /**
@@ -584,13 +380,43 @@ const SheetsAPI = {
      * @returns {Promise<boolean>} Success status
      */
     async updateCourseLastPlayed(courseId, date) {
-        const courses = await this.loadCourses();
-        const course = courses.find(c => c.course_id === courseId);
-        if (course) {
-            course.last_played = date;
-            return this.updateRow(CONFIG.sheets.courses, 'course_id', courseId, course);
+        const allCourses = await this.getRows(CONFIG.sheets.courses);
+        const rowIndex = allCourses.findIndex(c => c.course_id === courseId);
+
+        if (rowIndex === -1) {
+            console.warn('Course not found for update:', courseId);
+            return false;
         }
-        return false;
+
+        const course = allCourses[rowIndex];
+        course.last_played = date;
+
+        // Row index in API is 1-based, data starts at row 2
+        const apiRowIndex = rowIndex + 2;
+        const data = this.prepareRowData(course, CONFIG.sheetHeaders.courses);
+        await this.updateRow(CONFIG.sheets.courses, apiRowIndex, data);
+        return true;
+    },
+
+    /**
+     * Prepare row data for API (convert values to strings, handle booleans)
+     * @param {Object} data - The raw data
+     * @param {Array<string>} headers - The header fields
+     * @returns {Object} Prepared data
+     */
+    prepareRowData(data, headers) {
+        const prepared = {};
+        headers.forEach(header => {
+            const value = data[header];
+            if (value === null || value === undefined) {
+                prepared[header] = '';
+            } else if (typeof value === 'boolean') {
+                prepared[header] = value ? 'TRUE' : 'FALSE';
+            } else {
+                prepared[header] = String(value);
+            }
+        });
+        return prepared;
     },
 
     // ===================
@@ -607,9 +433,9 @@ const SheetsAPI = {
 
             // Load all data
             const courses = await this.loadCourses();
-            const allHoles = await this.readSheet(CONFIG.sheets.holes);
-            const allRounds = await this.readSheet(CONFIG.sheets.rounds);
-            const allScores = await this.readSheet(CONFIG.sheets.scores);
+            const allHoles = await this.getRows(CONFIG.sheets.holes);
+            const allRounds = await this.getRows(CONFIG.sheets.rounds);
+            const allScores = await this.getRows(CONFIG.sheets.scores);
 
             // Store locally
             await Storage.putMany('courses', courses);

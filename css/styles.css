@@ -440,8 +440,8 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .logo-section {
-    margin-top: auto;
-    margin-bottom: var(--spacing-2xl);
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
 }
 
 .app-logo {
@@ -1299,3 +1299,297 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 /* Dark mode is now the default theme */
+
+/* ===================================
+   Setup Wizard Styles
+   =================================== */
+.setup-wizard {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+    text-align: center;
+}
+
+.setup-header {
+    margin-bottom: var(--spacing-xl);
+}
+
+.setup-header .app-logo {
+    margin-bottom: var(--spacing-md);
+}
+
+.setup-header h2 {
+    color: var(--color-gray-900);
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--spacing-sm);
+}
+
+.setup-intro {
+    color: var(--color-gray-600);
+    font-size: var(--font-size-sm);
+}
+
+.setup-steps {
+    text-align: left;
+    padding: var(--spacing-lg);
+    background: var(--color-bg-card);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-lg);
+    list-style-position: inside;
+    counter-reset: step;
+    list-style: none;
+}
+
+.setup-steps li {
+    padding: var(--spacing-sm) 0;
+    color: var(--color-gray-700);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    position: relative;
+    padding-left: var(--spacing-xl);
+}
+
+.setup-steps li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: var(--spacing-sm);
+    width: 24px;
+    height: 24px;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.service-email {
+    display: block;
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-bg-input);
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    font-size: var(--font-size-xs);
+    color: var(--color-primary-light);
+    word-break: break-all;
+    user-select: all;
+    cursor: text;
+}
+
+.share-note {
+    color: var(--color-gray-500);
+    font-size: var(--font-size-xs);
+    font-style: italic;
+}
+
+.setup-hint {
+    display: block;
+    color: var(--color-gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: var(--spacing-xs);
+}
+
+.setup-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.setup-input-group input {
+    width: 100%;
+    padding: var(--spacing-md);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-gray-400);
+    border-radius: var(--radius-md);
+    color: var(--color-gray-900);
+    font-size: var(--font-size-base);
+}
+
+.setup-input-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.setup-input-group input::placeholder {
+    color: var(--color-gray-500);
+}
+
+.setup-status {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.setup-status.info {
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--color-info);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.setup-status.success {
+    background: rgba(52, 211, 153, 0.1);
+    color: var(--color-success);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.setup-status.error {
+    background: rgba(248, 113, 113, 0.1);
+    color: var(--color-danger);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* ===================================
+   Settings Screen Styles
+   =================================== */
+.settings-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    color: var(--color-gray-600);
+    font-size: var(--font-size-sm);
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.settings-link:hover,
+.settings-link:focus {
+    color: var(--color-gray-800);
+}
+
+.settings-link svg {
+    opacity: 0.7;
+}
+
+.settings-section {
+    background: var(--color-bg-card);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.settings-section h3 {
+    color: var(--color-gray-900);
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-gray-400);
+}
+
+.settings-connected {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.status-badge.connected {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--color-success);
+}
+
+.status-badge.disconnected {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--color-danger);
+}
+
+.sheet-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--color-primary-light);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+    padding: var(--spacing-sm) 0;
+}
+
+.sheet-link:hover,
+.sheet-link:focus {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+.settings-edit {
+    margin-top: var(--spacing-md);
+}
+
+.settings-edit-note {
+    color: var(--color-gray-700);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.settings-input-group {
+    margin: var(--spacing-md) 0;
+}
+
+.settings-input-group input {
+    width: 100%;
+    padding: var(--spacing-md);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-gray-400);
+    border-radius: var(--radius-md);
+    color: var(--color-gray-900);
+    font-size: var(--font-size-base);
+}
+
+.settings-input-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.settings-input-group input::placeholder {
+    color: var(--color-gray-500);
+}
+
+.settings-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.settings-actions button {
+    flex: 1;
+}
+
+.settings-about {
+    color: var(--color-gray-600);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    margin-bottom: var(--spacing-md);
+}
+
+.settings-links {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-md);
+    font-size: var(--font-size-sm);
+}

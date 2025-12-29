@@ -9,13 +9,13 @@ const App = {
     // Application state
     state: {
         isOnline: navigator.onLine,
-        isSignedIn: false,
         currentScreen: 'home',
         courses: [],
         currentRound: null,
         currentHoleIndex: 0,
         holeStats: {},
-        courseStats: null
+        courseStats: null,
+        editingSettings: false
     },
 
     /**
@@ -34,25 +34,28 @@ const App = {
             // Check online status
             this.updateOnlineStatus();
 
-            // Initialize Google API
-            await SheetsAPI.init();
-            SheetsAPI.initTokenClient();
+            // Check for existing spreadsheet connection
+            const spreadsheetId = Storage.getSpreadsheetId();
 
-            // Try to restore existing session from stored token
+            if (!spreadsheetId) {
+                // No connection - show setup wizard
+                Utils.hideLoading();
+                this.showScreen('setup');
+                console.log('No spreadsheet configured - showing setup wizard');
+                return;
+            }
+
+            // Configure API client with stored ID
+            SheetsAPI.setSpreadsheetId(spreadsheetId);
+
+            // Try to sync data if online
             if (this.state.isOnline) {
-                const sessionRestored = await SheetsAPI.tryRestoreSession();
-                if (sessionRestored) {
-                    this.state.isSignedIn = true;
-                    const userInfo = Storage.getUserInfo();
-                    if (userInfo) {
-                        console.log(`Session restored for ${userInfo.name || 'User'}`);
-                    }
-                    // Sync data from sheets if we have a valid session
-                    try {
-                        await SheetsAPI.syncFromSheets();
-                    } catch (syncError) {
-                        console.warn('Failed to sync on session restore:', syncError);
-                    }
+                try {
+                    await SheetsAPI.health();
+                    await SheetsAPI.syncFromSheets();
+                } catch (syncError) {
+                    console.warn('Failed to sync on startup:', syncError);
+                    // Continue with cached data
                 }
             }
 
@@ -62,14 +65,10 @@ const App = {
             // Check for incomplete round
             this.checkIncompleteRound();
 
-            // Update UI
-            this.updateAuthUI();
-
             Utils.hideLoading();
 
-            // Check for hash-based navigation (e.g., #privacy, #terms)
-            // Must run after hideLoading to ensure UI is ready
-            this.handleHashNavigation();
+            // Show home screen
+            this.showScreen('home');
 
             console.log('App initialized successfully');
         } catch (error) {
@@ -89,12 +88,19 @@ const App = {
 
         // Header buttons
         document.getElementById('back-btn').addEventListener('click', () => this.handleBack());
-        document.getElementById('auth-btn').addEventListener('click', () => this.handleAuthClick());
+
+        // Setup wizard
+        document.getElementById('setup-connect-btn').addEventListener('click', () => this.handleSetupConnect());
 
         // Home screen buttons
-        document.getElementById('sign-in-btn').addEventListener('click', () => this.handleSignIn());
         document.getElementById('new-round-btn').addEventListener('click', () => this.handleNewRound());
         document.getElementById('resume-round-btn').addEventListener('click', () => this.handleResumeRound());
+        document.getElementById('settings-btn').addEventListener('click', () => this.showScreen('settings'));
+
+        // Settings screen
+        document.getElementById('change-sheet-btn').addEventListener('click', () => this.handleStartEditSettings());
+        document.getElementById('settings-cancel-btn').addEventListener('click', () => this.handleCancelEditSettings());
+        document.getElementById('settings-save-btn').addEventListener('click', () => this.handleSaveSettings());
 
         // Course selection
         document.getElementById('create-course-btn').addEventListener('click', () => this.showScreen('new-course'));
@@ -161,11 +167,10 @@ const App = {
     updateOnlineStatus() {
         this.state.isOnline = navigator.onLine;
         const indicator = document.getElementById('offline-indicator');
-        const syncStatus = document.getElementById('sync-status');
 
         if (this.state.isOnline) {
             Utils.toggleElement(indicator, false);
-            if (this.state.isSignedIn) {
+            if (SheetsAPI.isConfigured()) {
                 this.processPendingSync();
             }
         } else {
@@ -173,60 +178,175 @@ const App = {
         }
     },
 
-    /**
-     * Update authentication UI
-     */
-    updateAuthUI() {
-        const authSection = document.getElementById('auth-section');
-        const mainActions = document.getElementById('main-actions');
+    // ===================
+    // Setup Wizard Handlers
+    // ===================
 
-        if (this.state.isSignedIn) {
-            Utils.toggleElement(authSection, false);
-            Utils.toggleElement(mainActions, true);
-        } else {
-            Utils.toggleElement(authSection, true);
-            Utils.toggleElement(mainActions, false);
+    /**
+     * Handle setup connect button click
+     */
+    async handleSetupConnect() {
+        const sheetIdInput = document.getElementById('setup-sheet-id');
+        const sheetId = sheetIdInput.value.trim();
+
+        if (!sheetId) {
+            this.showSetupStatus('Please enter a Sheet ID', 'error');
+            return;
         }
-    },
 
-    /**
-     * Handle sign in button click
-     */
-    async handleSignIn() {
+        this.showSetupStatus('Connecting...', 'info');
+        const connectBtn = document.getElementById('setup-connect-btn');
+        connectBtn.disabled = true;
+        connectBtn.textContent = 'Connecting...';
+
         try {
-            Utils.showLoading('Signing in...');
-            const userInfo = await SheetsAPI.signIn();
-            this.state.isSignedIn = true;
-            this.updateAuthUI();
+            // Set the spreadsheet ID
+            SheetsAPI.setSpreadsheetId(sheetId);
 
-            // Sync data from sheets
-            if (this.state.isOnline) {
-                await SheetsAPI.syncFromSheets();
-                await this.loadCachedData();
+            // Test the connection
+            await SheetsAPI.health();
+
+            // Initialize sheets (create if they don't exist, set up headers if empty)
+            this.showSetupStatus('Initializing sheets...', 'info');
+            const result = await SheetsAPI.initializeSheets();
+
+            if (result.created.length > 0) {
+                console.log('Created sheets:', result.created);
+            }
+            if (result.initialized && result.initialized.length > 0) {
+                console.log('Initialized headers for existing sheets:', result.initialized);
             }
 
-            Utils.hideLoading();
-            Utils.showToast(`Welcome, ${userInfo.name || 'User'}!`, 'success');
+            // Save the spreadsheet ID
+            Storage.setSpreadsheetId(sheetId);
+
+            this.showSetupStatus('Connected! Loading data...', 'success');
+
+            // Sync data
+            await SheetsAPI.syncFromSheets();
+            await this.loadCachedData();
+
+            // Navigate to home
+            Utils.showToast('Successfully connected!', 'success');
+            this.showScreen('home');
+
         } catch (error) {
-            console.error('Sign in error:', error);
-            Utils.hideLoading();
-            Utils.showToast('Failed to sign in', 'error');
+            console.error('Setup connection error:', error);
+            this.showSetupStatus('Connection failed. Check the Sheet ID and make sure you shared it with the service account.', 'error');
+            SheetsAPI.setSpreadsheetId(null);
+        } finally {
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Connect';
         }
     },
 
     /**
-     * Handle auth button click (in header)
+     * Show status message in setup wizard
      */
-    handleAuthClick() {
-        if (this.state.isSignedIn) {
-            if (confirm('Sign out?')) {
-                SheetsAPI.signOut();
-                this.state.isSignedIn = false;
-                this.updateAuthUI();
-                Utils.showToast('Signed out', 'info');
-            }
-        } else {
-            this.handleSignIn();
+    showSetupStatus(message, type) {
+        const statusEl = document.getElementById('setup-status');
+        statusEl.textContent = message;
+        statusEl.className = `setup-status ${type}`;
+        Utils.toggleElement(statusEl, true);
+    },
+
+    // ===================
+    // Settings Handlers
+    // ===================
+
+    /**
+     * Handle start editing settings
+     */
+    handleStartEditSettings() {
+        this.state.editingSettings = true;
+        const currentId = Storage.getSpreadsheetId();
+        document.getElementById('settings-sheet-id').value = currentId || '';
+        Utils.toggleElement('settings-connected', false);
+        Utils.toggleElement('settings-edit', true);
+    },
+
+    /**
+     * Handle cancel editing settings
+     */
+    handleCancelEditSettings() {
+        this.state.editingSettings = false;
+        Utils.toggleElement('settings-connected', true);
+        Utils.toggleElement('settings-edit', false);
+        Utils.toggleElement('settings-status', false);
+    },
+
+    /**
+     * Handle save settings
+     */
+    async handleSaveSettings() {
+        const sheetIdInput = document.getElementById('settings-sheet-id');
+        const sheetId = sheetIdInput.value.trim();
+
+        if (!sheetId) {
+            this.showSettingsStatus('Please enter a Sheet ID', 'error');
+            return;
+        }
+
+        this.showSettingsStatus('Connecting...', 'info');
+        const saveBtn = document.getElementById('settings-save-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Connecting...';
+
+        try {
+            // Set the spreadsheet ID
+            SheetsAPI.setSpreadsheetId(sheetId);
+
+            // Test the connection
+            await SheetsAPI.health();
+
+            // Initialize sheets
+            this.showSettingsStatus('Initializing sheets...', 'info');
+            await SheetsAPI.initializeSheets();
+
+            // Save the spreadsheet ID
+            Storage.setSpreadsheetId(sheetId);
+
+            // Sync data
+            this.showSettingsStatus('Syncing data...', 'info');
+            await SheetsAPI.syncFromSheets();
+            await this.loadCachedData();
+
+            // Update UI
+            this.state.editingSettings = false;
+            this.updateSettingsUI();
+            Utils.toggleElement('settings-connected', true);
+            Utils.toggleElement('settings-edit', false);
+            Utils.toggleElement('settings-status', false);
+
+            Utils.showToast('Spreadsheet updated successfully!', 'success');
+
+        } catch (error) {
+            console.error('Settings save error:', error);
+            this.showSettingsStatus('Connection failed. Check the Sheet ID and sharing.', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save & Connect';
+        }
+    },
+
+    /**
+     * Show status message in settings
+     */
+    showSettingsStatus(message, type) {
+        const statusEl = document.getElementById('settings-status');
+        statusEl.textContent = message;
+        statusEl.className = `setup-status ${type}`;
+        Utils.toggleElement(statusEl, true);
+    },
+
+    /**
+     * Update settings UI with current connection info
+     */
+    updateSettingsUI() {
+        const spreadsheetId = Storage.getSpreadsheetId();
+        if (spreadsheetId) {
+            const sheetLink = document.getElementById('settings-sheet-link');
+            sheetLink.href = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
         }
     },
 
@@ -266,9 +386,18 @@ const App = {
 
         // Update header
         switch (screenName) {
+            case 'setup':
+                Utils.setHeaderTitle('Disc Golf Tracker');
+                Utils.showBackButton(false);
+                break;
             case 'home':
                 Utils.setHeaderTitle('Disc Golf Tracker');
                 Utils.showBackButton(false);
+                break;
+            case 'settings':
+                Utils.setHeaderTitle('Settings');
+                Utils.showBackButton(true);
+                this.updateSettingsUI();
                 break;
             case 'course-select':
                 Utils.setHeaderTitle('Select Course');
@@ -286,41 +415,9 @@ const App = {
                 Utils.setHeaderTitle('Round Summary');
                 Utils.showBackButton(false);
                 break;
-            case 'terms':
-                Utils.setHeaderTitle('Terms of Service');
-                Utils.showBackButton(true);
-                break;
-            case 'privacy':
-                Utils.setHeaderTitle('Privacy Policy');
-                Utils.showBackButton(true);
-                break;
         }
     },
 
-    /**
-     * Handle hash-based navigation (e.g., #privacy, #terms)
-     */
-    handleHashNavigation() {
-        const hash = window.location.hash.slice(1); // Remove the '#'
-        const validScreens = ['privacy', 'terms'];
-
-        if (hash && validScreens.includes(hash)) {
-            // Use setTimeout to ensure DOM is fully ready
-            setTimeout(() => {
-                this.showScreen(hash);
-            }, 0);
-        }
-
-        // Listen for hash changes
-        window.addEventListener('hashchange', () => {
-            const newHash = window.location.hash.slice(1);
-            if (newHash && validScreens.includes(newHash)) {
-                this.showScreen(newHash);
-            } else if (!newHash) {
-                this.showScreen('home');
-            }
-        });
-    },
 
     /**
      * Handle back button
@@ -329,8 +426,7 @@ const App = {
         switch (this.state.currentScreen) {
             case 'course-select':
             case 'new-course':
-            case 'terms':
-            case 'privacy':
+            case 'settings':
                 this.showScreen('home');
                 break;
             case 'scoring':
@@ -462,7 +558,7 @@ const App = {
             // Load holes for this course
             let holes = await Storage.getByIndex('holes', 'course_id', course.course_id);
 
-            if (holes.length === 0 && this.state.isOnline && SheetsAPI.isSignedIn()) {
+            if (holes.length === 0 && this.state.isOnline && SheetsAPI.isConfigured()) {
                 // Try loading from sheets
                 holes = await SheetsAPI.loadHolesForCourse(course.course_id);
                 await Storage.putMany('holes', holes);
@@ -1102,7 +1198,7 @@ const App = {
                 await Storage.put('courses', round.courseData);
                 await Storage.putMany('holes', round.holes);
 
-                if (this.state.isOnline && SheetsAPI.isSignedIn()) {
+                if (this.state.isOnline && SheetsAPI.isConfigured()) {
                     await SheetsAPI.saveCourse(round.courseData);
                     await SheetsAPI.saveHoles(round.holes);
                 } else {
@@ -1124,7 +1220,7 @@ const App = {
             await Storage.put('rounds', roundData);
             await Storage.putMany('scores', round.scores);
 
-            if (this.state.isOnline && SheetsAPI.isSignedIn()) {
+            if (this.state.isOnline && SheetsAPI.isConfigured()) {
                 await SheetsAPI.saveRound(roundData);
                 await SheetsAPI.saveScores(round.scores);
                 await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
@@ -1170,7 +1266,7 @@ const App = {
      * Process pending sync operations
      */
     async processPendingSync() {
-        if (!this.state.isOnline || !SheetsAPI.isSignedIn()) return;
+        if (!this.state.isOnline || !SheetsAPI.isConfigured()) return;
 
         const pending = Storage.getPendingSync();
         if (pending.length === 0) return;

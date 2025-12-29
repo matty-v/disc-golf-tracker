@@ -2,26 +2,14 @@
  * Disc Golf Tracker - Configuration
  *
  * This file contains configuration settings for the application.
- * IMPORTANT: Replace the placeholder values with your actual Google Cloud credentials.
  */
 
 const CONFIG = {
-    // Google API Configuration
-    // You need to create a project in Google Cloud Console and enable the Google Sheets API
-    // Then create OAuth 2.0 credentials and replace these values
-    google: {
-        // Replace with your Google Cloud Project Client ID
-        // Get this from: https://console.cloud.google.com/apis/credentials
-        clientId: '201158295757-bkhied76fjhe75phhqptice1mc7lj4m1.apps.googleusercontent.com',
-
-        // Google Sheets API scope
-        scopes: 'https://www.googleapis.com/auth/spreadsheets',
-
-        // Discovery docs for Google Sheets API
-        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
-
-        // Spreadsheet name for new spreadsheets
-        spreadsheetTitle: 'Disc Golf Tracker Data'
+    // Sheets DB API Configuration
+    // Backend API that handles Google Sheets operations via service account
+    api: {
+        baseUrl: 'https://us-central1-kinetic-object-322814.cloudfunctions.net/sheetsApi',
+        serviceAccountEmail: 'sheets-db-api@kinetic-object-322814.iam.gserviceaccount.com'
     },
 
     // Sheet tab names
@@ -117,7 +105,7 @@ const CONFIG = {
 
 // Freeze the configuration to prevent accidental modifications
 Object.freeze(CONFIG);
-Object.freeze(CONFIG.google);
+Object.freeze(CONFIG.api);
 Object.freeze(CONFIG.sheets);
 Object.freeze(CONFIG.sheetHeaders);
 Object.freeze(CONFIG.validation);
