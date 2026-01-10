@@ -1,0 +1,48 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to GCS
+        run: |
+          BUCKET_NAME="disc-golf-tracker"
+
+          # Upload HTML (no cache)
+          gsutil -h "Content-Type:text/html" -h "Cache-Control:no-cache, max-age=0" \
+              cp index.html "gs://${BUCKET_NAME}/"
+
+          # Upload CSS (long cache)
+          gsutil -h "Content-Type:text/css" -h "Cache-Control:public, max-age=31536000" \
+              cp -r css "gs://${BUCKET_NAME}/"
+
+          # Upload JavaScript (long cache)
+          gsutil -h "Content-Type:application/javascript" -h "Cache-Control:public, max-age=31536000" \
+              cp -r js "gs://${BUCKET_NAME}/"
+
+          # Upload manifest (no cache)
+          gsutil -h "Content-Type:application/manifest+json" -h "Cache-Control:no-cache, max-age=0" \
+              cp manifest.json "gs://${BUCKET_NAME}/"
+
+          # Upload service worker (no cache)
+          gsutil -h "Content-Type:application/javascript" -h "Cache-Control:no-cache, max-age=0" \
+              cp sw.js "gs://${BUCKET_NAME}/"
+
+          # Upload icons (long cache)
+          gsutil -h "Cache-Control:public, max-age=31536000" \
+              -m cp -r icons "gs://${BUCKET_NAME}/"
