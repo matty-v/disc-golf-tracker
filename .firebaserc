@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "kinetic-object-322814"
+  },
+  "targets": {
+    "kinetic-object-322814": {
+      "hosting": {
+        "disc-golf-voget": [
+          "disc-golf-voget"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
