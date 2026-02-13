@@ -748,19 +748,20 @@ const App = {
             Utils.toggleElement(holeSetup, true);
             Utils.toggleElement(holeInfo, false);
             Utils.toggleElement(statsSection, false);
+            Utils.toggleElement('hole-par-display', false);
 
             document.getElementById('setup-par').value = hole.par || 3;
             document.getElementById('setup-distance').value = hole.distance || '';
         } else {
             Utils.toggleElement(holeSetup, false);
-            Utils.toggleElement(holeInfo, true);
+            Utils.toggleElement('hole-par-display', true);
 
-            document.getElementById('hole-par-display').textContent = hole.par;
+            document.getElementById('hole-par-display').textContent = `Par ${hole.par}`;
             if (hole.distance) {
                 document.getElementById('hole-distance-display').textContent = `${hole.distance} ft`;
-                Utils.toggleElement('distance-chip', true);
+                Utils.toggleElement(holeInfo, true);
             } else {
-                Utils.toggleElement('distance-chip', false);
+                Utils.toggleElement(holeInfo, false);
             }
 
             // Show statistics

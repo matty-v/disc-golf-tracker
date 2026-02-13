@@ -581,18 +581,31 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .hole-indicator {
     text-align: center;
+    flex: 1;
 }
 
 #current-hole-label {
     display: block;
-    font-size: var(--font-size-2xl);
+    font-size: 2.75rem;
+    font-weight: 800;
+    color: var(--color-white);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hole-par-label {
+    display: block;
+    font-size: var(--font-size-xl);
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--color-primary-light);
+    margin-top: var(--spacing-xs);
 }
 
 #hole-count-label {
-    font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+    margin-top: var(--spacing-xs);
 }
 
 /* Hole Info */
