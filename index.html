@@ -204,7 +204,22 @@
                         </button>
                         <div class="hole-indicator" aria-live="polite" aria-atomic="true">
                             <span id="current-hole-label">Hole 1</span>
-                            <span id="hole-par-display" class="hole-par-label hidden">Par 3</span>
+                            <div id="hole-par-display" class="hole-par-label hidden">
+                                <span id="hole-par-text" class="editable-value" aria-label="Tap to edit par">Par 3</span>
+                                <svg class="edit-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                </svg>
+                            </div>
+                            <div id="hole-par-editor" class="inline-editor hidden">
+                                <div class="number-input-group" role="group" aria-label="Edit par">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="edit-par" aria-label="Decrease par">-</button>
+                                    <input type="number" id="edit-par" value="3" min="2" max="6" aria-label="Par value">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="edit-par" aria-label="Increase par">+</button>
+                                </div>
+                                <button type="button" id="edit-par-save" class="btn-inline-save" aria-label="Save par">
+                                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                </button>
+                            </div>
                             <span id="hole-count-label">of 18</span>
                         </div>
                         <button id="next-hole-btn" class="btn-icon" aria-label="Go to next hole">
@@ -218,7 +233,18 @@
                     <div id="hole-info" class="hole-info hidden">
                         <div class="info-chip" id="distance-chip">
                             <span class="info-label">Distance</span>
-                            <span id="hole-distance-display" class="info-value">285 ft</span>
+                            <div id="hole-distance-display" class="info-value editable-value" aria-label="Tap to edit distance">
+                                <span id="hole-distance-text">285 ft</span>
+                                <svg class="edit-icon" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                </svg>
+                            </div>
+                            <div id="hole-distance-editor" class="inline-editor hidden">
+                                <input type="number" id="edit-distance" value="" min="0" max="1500" placeholder="ft" aria-label="Distance in feet" class="edit-distance-input">
+                                <button type="button" id="edit-distance-save" class="btn-inline-save" aria-label="Save distance">
+                                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 

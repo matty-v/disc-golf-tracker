@@ -131,6 +131,20 @@ const App = {
             btn.addEventListener('click', (e) => this.handleStepper(e));
         });
 
+        // Inline editing for par and distance on existing courses
+        document.getElementById('hole-par-text').addEventListener('click', () => this.startEditPar());
+        document.getElementById('edit-par-save').addEventListener('click', () => this.saveEditPar());
+        document.getElementById('hole-distance-display').addEventListener('click', () => this.startEditDistance());
+        document.getElementById('edit-distance-save').addEventListener('click', () => this.saveEditDistance());
+
+        // Allow Enter key to confirm inline edits
+        document.getElementById('edit-par').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.saveEditPar();
+        });
+        document.getElementById('edit-distance').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.saveEditDistance();
+        });
+
         // Validation on input
         document.getElementById('score-approaches').addEventListener('input', () => this.validateScoreDetails());
         document.getElementById('score-putts').addEventListener('input', () => this.validateScoreDetails());
@@ -749,6 +763,7 @@ const App = {
             Utils.toggleElement(holeInfo, false);
             Utils.toggleElement(statsSection, false);
             Utils.toggleElement('hole-par-display', false);
+            Utils.toggleElement('hole-par-editor', false);
 
             document.getElementById('setup-par').value = hole.par || 3;
             document.getElementById('setup-distance').value = hole.distance || '';
@@ -756,9 +771,19 @@ const App = {
             Utils.toggleElement(holeSetup, false);
             Utils.toggleElement('hole-par-display', true);
 
-            document.getElementById('hole-par-display').textContent = `Par ${hole.par}`;
+            // Reset inline editors to display mode
+            Utils.toggleElement('hole-par-editor', false);
+            Utils.toggleElement('hole-par-text', true);
+            const parEditIcon = document.querySelector('#hole-par-display .edit-icon');
+            if (parEditIcon) parEditIcon.classList.remove('hidden');
+            Utils.toggleElement('hole-distance-editor', false);
+            Utils.toggleElement('hole-distance-text', true);
+            const distEditIcon = document.querySelector('#hole-distance-display .edit-icon');
+            if (distEditIcon) distEditIcon.classList.remove('hidden');
+
+            document.getElementById('hole-par-text').textContent = `Par ${hole.par}`;
             if (hole.distance) {
-                document.getElementById('hole-distance-display').textContent = `${hole.distance} ft`;
+                document.getElementById('hole-distance-text').textContent = `${hole.distance} ft`;
                 Utils.toggleElement(holeInfo, true);
             } else {
                 Utils.toggleElement(holeInfo, false);
@@ -1260,6 +1285,127 @@ const App = {
     saveCurrentRoundState() {
         if (this.state.currentRound) {
             Storage.saveCurrentRound(this.state.currentRound);
+        }
+    },
+
+    // ===================
+    // Inline Hole Editing
+    // ===================
+
+    /**
+     * Start editing par inline
+     */
+    startEditPar() {
+        const round = this.state.currentRound;
+        if (!round || round.isNewCourse) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        document.getElementById('edit-par').value = hole.par || 3;
+        Utils.toggleElement('hole-par-text', false);
+        document.querySelector('#hole-par-display .edit-icon').classList.add('hidden');
+        Utils.toggleElement('hole-par-editor', true);
+        document.getElementById('edit-par').focus();
+    },
+
+    /**
+     * Save edited par value
+     */
+    async saveEditPar() {
+        const round = this.state.currentRound;
+        if (!round) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        const newPar = parseInt(document.getElementById('edit-par').value, 10);
+
+        if (!Utils.isValidNumber(newPar, 2, 6)) {
+            Utils.showToast('Par must be between 2 and 6', 'error');
+            return;
+        }
+
+        hole.par = newPar;
+
+        // Update display
+        document.getElementById('hole-par-text').textContent = `Par ${newPar}`;
+        Utils.toggleElement('hole-par-text', true);
+        document.querySelector('#hole-par-display .edit-icon').classList.remove('hidden');
+        Utils.toggleElement('hole-par-editor', false);
+
+        // Update score relative display
+        this.updateScoreRelative();
+
+        // Persist the change
+        await this.persistHoleEdit(hole);
+        this.saveCurrentRoundState();
+    },
+
+    /**
+     * Start editing distance inline
+     */
+    startEditDistance() {
+        const round = this.state.currentRound;
+        if (!round || round.isNewCourse) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        document.getElementById('edit-distance').value = hole.distance || '';
+        Utils.toggleElement('hole-distance-text', false);
+        document.querySelector('#hole-distance-display .edit-icon').classList.add('hidden');
+        Utils.toggleElement('hole-distance-editor', true);
+        document.getElementById('edit-distance').focus();
+    },
+
+    /**
+     * Save edited distance value
+     */
+    async saveEditDistance() {
+        const round = this.state.currentRound;
+        if (!round) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        const distanceInput = document.getElementById('edit-distance').value.trim();
+        const newDistance = distanceInput ? parseInt(distanceInput, 10) : null;
+
+        if (newDistance !== null && !Utils.isValidNumber(newDistance, 0, 1500)) {
+            Utils.showToast('Distance must be between 0 and 1500', 'error');
+            return;
+        }
+
+        hole.distance = newDistance;
+
+        // Update display
+        if (newDistance) {
+            document.getElementById('hole-distance-text').textContent = `${newDistance} ft`;
+            Utils.toggleElement('hole-distance-text', true);
+            document.querySelector('#hole-distance-display .edit-icon').classList.remove('hidden');
+            Utils.toggleElement('hole-distance-editor', false);
+            Utils.toggleElement('hole-info', true);
+        } else {
+            Utils.toggleElement('hole-distance-editor', false);
+            Utils.toggleElement('hole-info', false);
+        }
+
+        // Persist the change
+        await this.persistHoleEdit(hole);
+        this.saveCurrentRoundState();
+    },
+
+    /**
+     * Persist a hole edit to local storage and sync to sheets
+     * @param {Object} hole - The updated hole data
+     */
+    async persistHoleEdit(hole) {
+        // Update in IndexedDB
+        await Storage.put('holes', hole);
+
+        // Sync to Google Sheets
+        if (this.state.isOnline && SheetsAPI.isConfigured()) {
+            try {
+                await SheetsAPI.updateHole(hole);
+            } catch (error) {
+                console.error('Failed to sync hole edit:', error);
+                await Storage.addPendingSync({ type: 'updateHole', data: hole });
+            }
+        } else {
+            await Storage.addPendingSync({ type: 'updateHole', data: hole });
         }
     },
 

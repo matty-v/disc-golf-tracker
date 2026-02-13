@@ -399,6 +399,26 @@ const SheetsAPI = {
     },
 
     /**
+     * Update a hole in Google Sheets
+     * @param {Object} hole - The hole data (must include hole_id)
+     * @returns {Promise<boolean>} Success status
+     */
+    async updateHole(hole) {
+        const allHoles = await this.getRows(CONFIG.sheets.holes);
+        const rowIndex = allHoles.findIndex(h => h.hole_id === hole.hole_id);
+
+        if (rowIndex === -1) {
+            console.warn('Hole not found for update:', hole.hole_id);
+            return false;
+        }
+
+        const apiRowIndex = rowIndex + 2;
+        const data = this.prepareRowData(hole, CONFIG.sheetHeaders.holes);
+        await this.updateRow(CONFIG.sheets.holes, apiRowIndex, data);
+        return true;
+    },
+
+    /**
      * Prepare row data for API (convert values to strings, handle booleans)
      * @param {Object} data - The raw data
      * @param {Array<string>} headers - The header fields
@@ -497,6 +517,9 @@ const SheetsAPI = {
                         break;
                     case 'saveScores':
                         await this.saveScores(operation.data);
+                        break;
+                    case 'updateHole':
+                        await this.updateHole(operation.data);
                         break;
                     case 'updateCourseLastPlayed':
                         await this.updateCourseLastPlayed(operation.data.courseId, operation.data.date);
