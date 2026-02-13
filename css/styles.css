@@ -581,18 +581,115 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .hole-indicator {
     text-align: center;
+    flex: 1;
 }
 
 #current-hole-label {
     display: block;
-    font-size: var(--font-size-2xl);
+    font-size: 2.75rem;
+    font-weight: 800;
+    color: var(--color-white);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hole-par-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: var(--font-size-xl);
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--color-primary-light);
+    margin-top: var(--spacing-xs);
 }
 
 #hole-count-label {
-    font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+    margin-top: var(--spacing-xs);
+}
+
+/* Editable Values */
+.editable-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.editable-value:hover,
+.editable-value:active {
+    background-color: rgba(99, 102, 241, 0.15);
+}
+
+.edit-icon {
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.editable-value:hover .edit-icon,
+.editable-value:active .edit-icon {
+    opacity: 0.8;
+}
+
+/* Inline Editor */
+.inline-editor {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    justify-content: center;
+    margin-top: var(--spacing-xs);
+}
+
+.inline-editor .number-input-group {
+    justify-content: center;
+}
+
+.inline-editor .btn-stepper {
+    width: 36px;
+    height: 36px;
+    font-size: var(--font-size-xl);
+}
+
+.inline-editor input[type="number"] {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+    text-align: center;
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-height: 36px;
+}
+
+.edit-distance-input {
+    width: 80px !important;
+    min-width: 80px !important;
+    max-width: 80px !important;
+}
+
+.btn-inline-save {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background-color: var(--color-success);
+    color: var(--color-white);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.btn-inline-save:hover,
+.btn-inline-save:active {
+    background-color: #2bb585;
 }
 
 /* Hole Info */
@@ -622,6 +719,77 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--color-gray-900);
+}
+
+/* Hole Description */
+.hole-description {
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.description-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    max-width: 100%;
+}
+
+.description-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    font-style: italic;
+}
+
+.description-editor {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    justify-content: center;
+}
+
+.description-editor input[type="text"] {
+    flex: 1;
+    max-width: 280px;
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-height: 36px;
+}
+
+.hole-description-add {
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.btn-add-description {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+    background: transparent;
+    border: 1px dashed var(--color-gray-400);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-add-description:hover,
+.btn-add-description:active {
+    color: var(--color-primary-light);
+    border-color: var(--color-primary-light);
+}
+
+.setup-description {
+    margin-top: var(--spacing-md);
+}
+
+.setup-description input[type="text"] {
+    font-size: var(--font-size-sm);
 }
 
 /* Stats Section */
@@ -1253,6 +1421,157 @@ input[type="number"]::-webkit-inner-spin-button {
 .legal-section a:hover,
 .legal-section a:focus {
     text-decoration: underline;
+}
+
+/* ===================================
+   Course Stats Screen
+   =================================== */
+.stats-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    max-width: 300px;
+    margin-top: var(--spacing-sm);
+}
+
+.course-stats-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.course-stats-card {
+    background-color: var(--color-bg-card);
+    border: 2px solid var(--color-gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    transition: border-color var(--transition-fast);
+}
+
+.course-stats-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-gray-300);
+}
+
+.course-stats-card-name {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-gray-900);
+}
+
+.course-stats-card-rounds {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+}
+
+.course-stats-overview {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.course-stats-overview .stat-item {
+    text-align: center;
+    padding: var(--spacing-sm);
+    background-color: var(--color-bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.course-stats-overview .stat-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-600);
+    margin-bottom: 2px;
+}
+
+.course-stats-overview .stat-value {
+    display: block;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+.course-stats-overview .stat-value.under-par {
+    color: var(--color-birdie);
+}
+
+.course-stats-overview .stat-value.over-par {
+    color: var(--color-bogey);
+}
+
+.course-stats-overview .stat-value.even-par {
+    color: var(--color-par);
+}
+
+.course-stats-hole-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+}
+
+.course-stats-hole-table th,
+.course-stats-hole-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    text-align: center;
+    border-bottom: 1px solid var(--color-gray-300);
+}
+
+.course-stats-hole-table th {
+    background-color: var(--color-gray-200);
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    color: var(--color-gray-600);
+}
+
+.course-stats-hole-table td {
+    color: var(--color-gray-800);
+}
+
+.course-stats-hole-table tfoot td {
+    font-weight: 700;
+    background-color: var(--color-gray-200);
+    border-top: 2px solid var(--color-gray-400);
+    color: var(--color-gray-900);
+}
+
+.course-stats-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    width: 100%;
+    padding: var(--spacing-sm);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-500);
+    background: transparent;
+    border: 1px solid var(--color-gray-400);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin-top: var(--spacing-sm);
+}
+
+.course-stats-toggle:hover,
+.course-stats-toggle:active {
+    color: var(--color-primary-light);
+    border-color: var(--color-primary-light);
+}
+
+.course-stats-toggle svg {
+    transition: transform var(--transition-fast);
+}
+
+.course-stats-toggle.expanded svg {
+    transform: rotate(180deg);
 }
 
 /* ===================================
