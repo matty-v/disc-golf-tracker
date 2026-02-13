@@ -137,12 +137,20 @@ const App = {
         document.getElementById('hole-distance-display').addEventListener('click', () => this.startEditDistance());
         document.getElementById('edit-distance-save').addEventListener('click', () => this.saveEditDistance());
 
+        // Inline editing for description on existing courses
+        document.getElementById('hole-description-display').addEventListener('click', () => this.startEditDescription());
+        document.getElementById('edit-description-save').addEventListener('click', () => this.saveEditDescription());
+        document.getElementById('add-description-btn').addEventListener('click', () => this.startEditDescription());
+
         // Allow Enter key to confirm inline edits
         document.getElementById('edit-par').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.saveEditPar();
         });
         document.getElementById('edit-distance').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.saveEditDistance();
+        });
+        document.getElementById('edit-description').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.saveEditDescription();
         });
 
         // Validation on input
@@ -667,7 +675,8 @@ const App = {
                 course_id: course.course_id,
                 hole_number: i,
                 par: 3,
-                distance: null
+                distance: null,
+                description: ''
             });
         }
 
@@ -764,9 +773,12 @@ const App = {
             Utils.toggleElement(statsSection, false);
             Utils.toggleElement('hole-par-display', false);
             Utils.toggleElement('hole-par-editor', false);
+            Utils.toggleElement('hole-description', false);
+            Utils.toggleElement('hole-description-add', false);
 
             document.getElementById('setup-par').value = hole.par || 3;
             document.getElementById('setup-distance').value = hole.distance || '';
+            document.getElementById('setup-description').value = hole.description || '';
         } else {
             Utils.toggleElement(holeSetup, false);
             Utils.toggleElement('hole-par-display', true);
@@ -787,6 +799,20 @@ const App = {
                 Utils.toggleElement(holeInfo, true);
             } else {
                 Utils.toggleElement(holeInfo, false);
+            }
+
+            // Show hole description or add button
+            Utils.toggleElement('hole-description-editor', false);
+            if (hole.description) {
+                document.getElementById('hole-description-text').textContent = hole.description;
+                Utils.toggleElement('hole-description-display', true);
+                Utils.toggleElement('hole-description', true);
+                const descEditIcon = document.querySelector('#hole-description-display .edit-icon');
+                if (descEditIcon) descEditIcon.classList.remove('hidden');
+                Utils.toggleElement('hole-description-add', false);
+            } else {
+                Utils.toggleElement('hole-description', false);
+                Utils.toggleElement('hole-description-add', true);
             }
 
             // Show statistics
@@ -1024,6 +1050,7 @@ const App = {
             hole.par = parseInt(document.getElementById('setup-par').value, 10) || 3;
             const distance = document.getElementById('setup-distance').value;
             hole.distance = distance ? parseInt(distance, 10) : null;
+            hole.description = document.getElementById('setup-description').value.trim();
         }
 
         // Create or update score
@@ -1381,6 +1408,53 @@ const App = {
         } else {
             Utils.toggleElement('hole-distance-editor', false);
             Utils.toggleElement('hole-info', false);
+        }
+
+        // Persist the change
+        await this.persistHoleEdit(hole);
+        this.saveCurrentRoundState();
+    },
+
+    /**
+     * Start editing description inline
+     */
+    startEditDescription() {
+        const round = this.state.currentRound;
+        if (!round || round.isNewCourse) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        document.getElementById('edit-description').value = hole.description || '';
+        Utils.toggleElement('hole-description-display', false);
+        Utils.toggleElement('hole-description-add', false);
+        Utils.toggleElement('hole-description', true);
+        Utils.toggleElement('hole-description-editor', true);
+        document.getElementById('edit-description').focus();
+    },
+
+    /**
+     * Save edited description value
+     */
+    async saveEditDescription() {
+        const round = this.state.currentRound;
+        if (!round) return;
+
+        const hole = round.holes[this.state.currentHoleIndex];
+        const newDescription = document.getElementById('edit-description').value.trim();
+
+        hole.description = newDescription;
+
+        // Update display
+        Utils.toggleElement('hole-description-editor', false);
+        if (newDescription) {
+            document.getElementById('hole-description-text').textContent = newDescription;
+            Utils.toggleElement('hole-description-display', true);
+            const descEditIcon = document.querySelector('#hole-description-display .edit-icon');
+            if (descEditIcon) descEditIcon.classList.remove('hidden');
+            Utils.toggleElement('hole-description', true);
+            Utils.toggleElement('hole-description-add', false);
+        } else {
+            Utils.toggleElement('hole-description', false);
+            Utils.toggleElement('hole-description-add', true);
         }
 
         // Persist the change

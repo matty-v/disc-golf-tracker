@@ -23,7 +23,7 @@ const CONFIG = {
     // Sheet headers for each tab
     sheetHeaders: {
         courses: ['course_id', 'course_name', 'hole_count', 'created_date', 'last_played'],
-        holes: ['hole_id', 'course_id', 'hole_number', 'par', 'distance'],
+        holes: ['hole_id', 'course_id', 'hole_number', 'par', 'distance', 'description'],
         rounds: ['round_id', 'course_id', 'round_date', 'completed', 'total_score', 'total_par'],
         scores: ['score_id', 'round_id', 'hole_id', 'hole_number', 'throws', 'approaches', 'putts', 'created_at']
     },

@@ -721,6 +721,77 @@ input[type="number"]::-webkit-inner-spin-button {
     color: var(--color-gray-900);
 }
 
+/* Hole Description */
+.hole-description {
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.description-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    max-width: 100%;
+}
+
+.description-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    font-style: italic;
+}
+
+.description-editor {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    justify-content: center;
+}
+
+.description-editor input[type="text"] {
+    flex: 1;
+    max-width: 280px;
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-height: 36px;
+}
+
+.hole-description-add {
+    text-align: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.btn-add-description {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+    background: transparent;
+    border: 1px dashed var(--color-gray-400);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-add-description:hover,
+.btn-add-description:active {
+    color: var(--color-primary-light);
+    border-color: var(--color-primary-light);
+}
+
+.setup-description {
+    margin-top: var(--spacing-md);
+}
+
+.setup-description input[type="text"] {
+    font-size: var(--font-size-sm);
+}
+
 /* Stats Section */
 .stats-section {
     background-color: var(--color-bg-card);

@@ -263,7 +263,8 @@ const SheetsAPI = {
                 ...hole,
                 hole_number: parseInt(hole.hole_number, 10),
                 par: parseInt(hole.par, 10) || 3,
-                distance: hole.distance ? parseInt(hole.distance, 10) : null
+                distance: hole.distance ? parseInt(hole.distance, 10) : null,
+                description: hole.description || ''
             }))
             .sort((a, b) => a.hole_number - b.hole_number);
     },
@@ -463,7 +464,8 @@ const SheetsAPI = {
                 ...hole,
                 hole_number: parseInt(hole.hole_number, 10),
                 par: parseInt(hole.par, 10) || 3,
-                distance: hole.distance ? parseInt(hole.distance, 10) : null
+                distance: hole.distance ? parseInt(hole.distance, 10) : null,
+                description: hole.description || ''
             })));
             await Storage.putMany('rounds', allRounds.map(round => ({
                 ...round,
