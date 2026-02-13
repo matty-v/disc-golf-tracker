@@ -96,6 +96,7 @@ const App = {
         document.getElementById('new-round-btn').addEventListener('click', () => this.handleNewRound());
         document.getElementById('resume-round-btn').addEventListener('click', () => this.handleResumeRound());
         document.getElementById('settings-btn').addEventListener('click', () => this.showScreen('settings'));
+        document.getElementById('stats-btn').addEventListener('click', () => this.showCourseStats());
 
         // Settings screen
         document.getElementById('change-sheet-btn').addEventListener('click', () => this.handleStartEditSettings());
@@ -421,6 +422,10 @@ const App = {
                 Utils.showBackButton(true);
                 this.updateSettingsUI();
                 break;
+            case 'course-stats':
+                Utils.setHeaderTitle('Course Stats');
+                Utils.showBackButton(true);
+                break;
             case 'course-select':
                 Utils.setHeaderTitle('Select Course');
                 Utils.showBackButton(true);
@@ -449,6 +454,7 @@ const App = {
             case 'course-select':
             case 'new-course':
             case 'settings':
+            case 'course-stats':
                 this.showScreen('home');
                 break;
             case 'scoring':
@@ -1481,6 +1487,219 @@ const App = {
         } else {
             await Storage.addPendingSync({ type: 'updateHole', data: hole });
         }
+    },
+
+    // ===================
+    // Course Stats View
+    // ===================
+
+    /**
+     * Show the course stats screen
+     */
+    async showCourseStats() {
+        Utils.showLoading('Loading stats...');
+
+        try {
+            const courses = this.state.courses;
+
+            if (courses.length === 0) {
+                Utils.hideLoading();
+                this.showScreen('course-stats');
+                Utils.toggleElement('course-stats-content', false);
+                Utils.toggleElement('no-stats-message', true);
+                return;
+            }
+
+            // Load all data for each course
+            const courseStatsData = [];
+
+            for (const course of courses) {
+                const holes = await Storage.getByIndex('holes', 'course_id', course.course_id);
+                holes.sort((a, b) => a.hole_number - b.hole_number);
+
+                const rounds = await Storage.getByIndex('rounds', 'course_id', course.course_id);
+                const completedRounds = rounds.filter(r => r.completed);
+
+                let scores = [];
+                if (completedRounds.length > 0) {
+                    const roundIds = completedRounds.map(r => r.round_id);
+                    const allScores = await Storage.getAll('scores');
+                    scores = allScores.filter(s => roundIds.includes(s.round_id));
+                }
+
+                const stats = Statistics.calculateCourseStats(
+                    course.course_id, rounds, scores, holes
+                );
+                const holeStats = Statistics.calculateCourseHoleStats(holes, scores);
+
+                courseStatsData.push({
+                    course,
+                    holes,
+                    stats,
+                    holeStats
+                });
+            }
+
+            Utils.hideLoading();
+
+            // Filter to courses with at least one completed round
+            const coursesWithData = courseStatsData.filter(d => d.stats.hasData);
+
+            if (coursesWithData.length === 0) {
+                this.showScreen('course-stats');
+                Utils.toggleElement('course-stats-content', false);
+                Utils.toggleElement('no-stats-message', true);
+                return;
+            }
+
+            this.showScreen('course-stats');
+            Utils.toggleElement('course-stats-content', true);
+            Utils.toggleElement('no-stats-message', false);
+            this.renderCourseStats(coursesWithData);
+        } catch (error) {
+            console.error('Error loading course stats:', error);
+            Utils.hideLoading();
+            Utils.showToast('Failed to load stats', 'error');
+        }
+    },
+
+    /**
+     * Render course stats cards
+     * @param {Array} coursesWithData - Array of {course, holes, stats, holeStats}
+     */
+    renderCourseStats(coursesWithData) {
+        const container = document.getElementById('course-stats-content');
+        container.innerHTML = '';
+
+        // Sort by most recently played
+        coursesWithData.sort((a, b) => {
+            const dateA = a.course.last_played ? new Date(a.course.last_played) : new Date(0);
+            const dateB = b.course.last_played ? new Date(b.course.last_played) : new Date(0);
+            return dateB - dateA;
+        });
+
+        coursesWithData.forEach(({ course, holes, stats, holeStats }) => {
+            const card = document.createElement('div');
+            card.className = 'course-stats-card';
+
+            // Format avg vs par
+            const avgRelative = stats.avgRelativeToPar;
+            const avgRelativeStr = avgRelative > 0 ? `+${avgRelative}` : avgRelative === 0 ? 'E' : `${avgRelative}`;
+            const avgRelativeClass = Utils.getTotalScoreClass(stats.avgTotalScore, stats.totalPar);
+
+            // Best round relative to par
+            const bestRelative = stats.bestRound.relativeToPar;
+            const bestRelativeStr = bestRelative > 0 ? `+${bestRelative}` : bestRelative === 0 ? 'E' : `${bestRelative}`;
+
+            // Build per-hole table rows
+            let holeTableRows = '';
+            let totalAvgScore = 0;
+            let totalAvgApproaches = 0;
+            let totalAvgPutts = 0;
+            let hasApproachData = false;
+            let hasPuttData = false;
+
+            holes.forEach(hole => {
+                const hs = holeStats[hole.hole_id];
+                const avgScore = hs && hs.hasData && hs.avgScore !== null ? hs.avgScore.toFixed(1) : '--';
+                const avgApproaches = hs && hs.hasEnoughApproachData && hs.avgApproaches !== null ? hs.avgApproaches.toFixed(1) : '--';
+                const avgPutts = hs && hs.hasEnoughPuttData && hs.avgPutts !== null ? hs.avgPutts.toFixed(1) : '--';
+
+                if (hs && hs.hasData && hs.avgScore !== null) {
+                    totalAvgScore += hs.avgScore;
+                }
+                if (hs && hs.hasEnoughApproachData && hs.avgApproaches !== null) {
+                    totalAvgApproaches += hs.avgApproaches;
+                    hasApproachData = true;
+                }
+                if (hs && hs.hasEnoughPuttData && hs.avgPutts !== null) {
+                    totalAvgPutts += hs.avgPutts;
+                    hasPuttData = true;
+                }
+
+                holeTableRows += `
+                    <tr>
+                        <td>${hole.hole_number}</td>
+                        <td>${hole.par}</td>
+                        <td>${avgScore}</td>
+                        <td>${avgApproaches}</td>
+                        <td>${avgPutts}</td>
+                    </tr>
+                `;
+            });
+
+            // Totals row
+            const totalPar = holes.reduce((sum, h) => sum + (h.par || 3), 0);
+            const totalAvgScoreStr = totalAvgScore > 0 ? totalAvgScore.toFixed(1) : '--';
+            const totalAvgApproachesStr = hasApproachData ? totalAvgApproaches.toFixed(1) : '--';
+            const totalAvgPuttsStr = hasPuttData ? totalAvgPutts.toFixed(1) : '--';
+
+            const tableId = `hole-table-${course.course_id}`;
+            const toggleId = `toggle-${course.course_id}`;
+
+            card.innerHTML = `
+                <div class="course-stats-card-header">
+                    <span class="course-stats-card-name">${course.course_name}</span>
+                    <span class="course-stats-card-rounds">${stats.roundCount} round${stats.roundCount !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="course-stats-overview">
+                    <div class="stat-item">
+                        <span class="stat-label">Avg Score</span>
+                        <span class="stat-value">${stats.avgTotalScore}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Avg vs Par</span>
+                        <span class="stat-value ${avgRelativeClass}">${avgRelativeStr}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Best Round</span>
+                        <span class="stat-value">${stats.bestRound.totalScore} (${bestRelativeStr})</span>
+                    </div>
+                </div>
+                <button class="course-stats-toggle" id="${toggleId}" aria-expanded="false" aria-controls="${tableId}">
+                    Per-Hole Averages
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                        <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
+                    </svg>
+                </button>
+                <div id="${tableId}" class="hidden">
+                    <table class="course-stats-hole-table">
+                        <thead>
+                            <tr>
+                                <th>Hole</th>
+                                <th>Par</th>
+                                <th>Avg Score</th>
+                                <th>Avg App</th>
+                                <th>Avg Putts</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${holeTableRows}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td>Total</td>
+                                <td>${totalPar}</td>
+                                <td>${totalAvgScoreStr}</td>
+                                <td>${totalAvgApproachesStr}</td>
+                                <td>${totalAvgPuttsStr}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+
+            container.appendChild(card);
+
+            // Add toggle listener
+            document.getElementById(toggleId).addEventListener('click', function() {
+                const table = document.getElementById(tableId);
+                const isHidden = table.classList.contains('hidden');
+                table.classList.toggle('hidden');
+                this.classList.toggle('expanded', isHidden);
+                this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            });
+        });
     },
 
     /**
