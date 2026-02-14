@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#0a0e14">
     <meta name="description" content="Track your disc golf rounds with detailed scoring, approach shots, and putts. View historical statistics for each hole.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,9 +14,19 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+    <!-- Cyberpunk Background Effects -->
+    <div class="gradient-backdrop"></div>
+    <div class="grid-overlay"></div>
+    <div class="scanline"></div>
+    <div class="corner-accent corner-accent--top-left"></div>
+    <div class="corner-accent corner-accent--bottom-right"></div>
+
     <div id="app">
         <!-- Header -->
         <header id="app-header" class="header">
@@ -46,12 +56,12 @@
                         <div class="setup-header">
                             <div class="app-logo">
                                 <svg viewBox="0 0 100 100" width="64" height="64">
-                                    <circle cx="50" cy="50" r="45" fill="#1a1a2e"/>
-                                    <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#6366f1" stroke-width="3"/>
-                                    <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#6366f1" stroke-width="2" opacity="0.7"/>
-                                    <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#6366f1" stroke-width="3"/>
-                                    <rect x="47" y="52" width="6" height="25" fill="#6366f1"/>
-                                    <ellipse cx="50" cy="77" rx="12" ry="4" fill="#6366f1"/>
+                                    <circle cx="50" cy="50" r="45" fill="#0a0e14"/>
+                                    <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#00d4ff" stroke-width="3"/>
+                                    <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#00d4ff" stroke-width="2" opacity="0.7"/>
+                                    <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#00d4ff" stroke-width="3"/>
+                                    <rect x="47" y="52" width="6" height="25" fill="#00d4ff"/>
+                                    <ellipse cx="50" cy="77" rx="12" ry="4" fill="#00d4ff"/>
                                 </svg>
                             </div>
                             <h2>Setup Required</h2>
@@ -91,12 +101,12 @@
                     <div class="logo-section">
                         <div class="app-logo">
                             <svg viewBox="0 0 100 100" width="80" height="80">
-                                <circle cx="50" cy="50" r="45" fill="#1a1a2e"/>
-                                <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#6366f1" stroke-width="3"/>
-                                <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#6366f1" stroke-width="2" opacity="0.7"/>
-                                <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#6366f1" stroke-width="3"/>
-                                <rect x="47" y="52" width="6" height="25" fill="#6366f1"/>
-                                <ellipse cx="50" cy="77" rx="12" ry="4" fill="#6366f1"/>
+                                <circle cx="50" cy="50" r="45" fill="#0a0e14"/>
+                                <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#00d4ff" stroke-width="3"/>
+                                <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#00d4ff" stroke-width="2" opacity="0.7"/>
+                                <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#00d4ff" stroke-width="3"/>
+                                <rect x="47" y="52" width="6" height="25" fill="#00d4ff"/>
+                                <ellipse cx="50" cy="77" rx="12" ry="4" fill="#00d4ff"/>
                             </svg>
                         </div>
                         <h2>Disc Golf Tracker</h2>
