@@ -277,6 +277,16 @@ body {
     min-width: 48px;
 }
 
+.header-settings-btn {
+    color: var(--color-gray-600);
+    transition: color var(--transition-fast);
+}
+
+.header-settings-btn:hover,
+.header-settings-btn:focus {
+    color: var(--color-primary);
+}
+
 .header-title {
     font-size: var(--font-size-lg);
     font-weight: 600;
@@ -555,59 +565,30 @@ input[type="number"]::-webkit-inner-spin-button {
 /* ===================================
    Home Screen
    =================================== */
-.home-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: var(--spacing-xl);
-    min-height: calc(100vh - 56px);
+.home-title-section {
     text-align: center;
+    margin-bottom: var(--spacing-lg);
 }
 
-.logo-section {
-    margin-top: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
+.home-title-section h2 {
+    font-size: var(--font-size-2xl);
+    color: var(--color-primary);
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
 }
 
 .app-logo {
     margin-bottom: var(--spacing-md);
 }
 
-.logo-section h2 {
-    font-size: var(--font-size-2xl);
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-xs);
-    text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-}
-
-.tagline {
-    font-size: var(--font-size-base);
-    color: var(--color-gray-600);
-}
-
-.auth-section {
+.resume-round-home {
     width: 100%;
-    max-width: 300px;
-    margin-bottom: var(--spacing-lg);
-}
-
-.auth-note {
-    font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
-    margin-top: var(--spacing-sm);
-}
-
-.main-actions {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
-    width: 100%;
-    max-width: 300px;
+    margin-bottom: var(--spacing-md);
 }
 
 .offline-indicator {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs);
     padding: var(--spacing-sm) var(--spacing-md);
     background-color: var(--color-warning);
@@ -618,28 +599,19 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-top: var(--spacing-lg);
 }
 
+.course-list-label {
+    font-size: var(--font-size-lg);
+    color: var(--color-gray-900);
+    margin-bottom: var(--spacing-sm);
+}
+
 /* ===================================
-   Course Selection Screen
+   Course List
    =================================== */
-.course-select-header {
-    text-align: center;
-    margin-bottom: var(--spacing-lg);
-}
-
-.course-select-header h2 {
-    font-size: var(--font-size-xl);
-    margin-bottom: var(--spacing-xs);
-}
-
-.course-select-header p {
-    color: var(--color-gray-600);
-}
-
 .course-list {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
-    margin-top: var(--spacing-lg);
 }
 
 .course-card {
@@ -670,6 +642,29 @@ input[type="number"]::-webkit-inner-spin-button {
     gap: var(--spacing-sm);
     padding: var(--spacing-lg);
     border-style: dashed;
+    color: var(--color-primary);
+    margin-top: var(--spacing-md);
+}
+
+.course-card-body {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.course-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.course-card-stats-btn {
+    color: var(--color-gray-600);
+    transition: color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.course-card-stats-btn:hover,
+.course-card-stats-btn:focus {
     color: var(--color-primary);
 }
 
@@ -753,17 +748,6 @@ input[type="number"]::-webkit-inner-spin-button {
 .editable-value:hover,
 .editable-value:active {
     background-color: rgba(0, 212, 255, 0.1);
-}
-
-.edit-icon {
-    opacity: 0.4;
-    flex-shrink: 0;
-    transition: opacity 0.3s ease;
-}
-
-.editable-value:hover .edit-icon,
-.editable-value:active .edit-icon {
-    opacity: 0.8;
 }
 
 /* Inline Editor */
@@ -1592,16 +1576,6 @@ input[type="number"]::-webkit-inner-spin-button {
 /* ===================================
    Course Stats Screen
    =================================== */
-.stats-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    width: 100%;
-    max-width: 300px;
-    margin-top: var(--spacing-sm);
-}
-
 .course-stats-content {
     display: flex;
     flex-direction: column;
@@ -1715,38 +1689,6 @@ input[type="number"]::-webkit-inner-spin-button {
     background-color: rgba(26, 36, 54, 0.8);
     border-top: 2px solid var(--color-border);
     color: var(--color-gray-900);
-}
-
-.course-stats-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-xs);
-    width: 100%;
-    padding: var(--spacing-sm);
-    font-family: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-gray-500);
-    background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-top: var(--spacing-sm);
-}
-
-.course-stats-toggle:hover,
-.course-stats-toggle:active {
-    color: var(--color-primary);
-    border-color: var(--color-primary);
-}
-
-.course-stats-toggle svg {
-    transition: transform 0.3s ease;
-}
-
-.course-stats-toggle.expanded svg {
-    transform: rotate(180deg);
 }
 
 /* ===================================
@@ -1949,30 +1891,6 @@ input[type="number"]::-webkit-inner-spin-button {
 /* ===================================
    Settings Screen Styles
    =================================== */
-.settings-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    color: var(--color-gray-600);
-    font-size: var(--font-size-sm);
-    margin-top: var(--spacing-md);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: color 0.3s ease;
-}
-
-.settings-link:hover,
-.settings-link:focus {
-    color: var(--color-primary);
-}
-
-.settings-link svg {
-    opacity: 0.7;
-}
-
 .settings-section {
     background: var(--color-bg-card);
     backdrop-filter: blur(10px);
