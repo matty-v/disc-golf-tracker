@@ -6,9 +6,9 @@
  * for API calls.
  */
 
-const CACHE_NAME = 'disc-golf-tracker-v5';
-const STATIC_CACHE_NAME = 'disc-golf-static-v5';
-const DATA_CACHE_NAME = 'disc-golf-data-v5';
+const CACHE_NAME = 'disc-golf-tracker-v6';
+const STATIC_CACHE_NAME = 'disc-golf-static-v6';
+const DATA_CACHE_NAME = 'disc-golf-data-v6';
 
 // Files to cache for offline use (relative paths for GCS deployment)
 const STATIC_FILES = [
@@ -178,7 +178,7 @@ async function networkFirst(request) {
  */
 async function updateCache(request) {
     try {
-        const networkResponse = await fetch(request);
+        const networkResponse = await fetch(request, { cache: 'reload' });
 
         if (networkResponse.ok) {
             const cache = await caches.open(STATIC_CACHE_NAME);
