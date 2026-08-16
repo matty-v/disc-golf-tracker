@@ -72,7 +72,35 @@ const Statistics = {
     calculateCourseStats(courseId, rounds, scores, holes) {
         const completedRounds = rounds.filter(r => r.completed);
 
-        if (completedRounds.length === 0) {
+        // Calculate total par for the course
+        const totalPar = holes.reduce((sum, hole) => sum + (hole.par || 3), 0);
+
+        // Get scores for each round. A round with no recorded scores (and no
+        // stored total_score) never counts — it must never displace a real
+        // round as the best, or drag the average down as if it scored 0.
+        const roundStats = completedRounds
+            .map(round => {
+                const roundScores = scores.filter(s => s.round_id === round.round_id);
+                const hasStoredTotal = round.total_score !== null && round.total_score !== undefined;
+
+                if (roundScores.length === 0 && !hasStoredTotal) {
+                    return null;
+                }
+
+                const totalScore = hasStoredTotal
+                    ? round.total_score
+                    : roundScores.reduce((sum, s) => sum + (s.throws || 0), 0);
+
+                return {
+                    round_id: round.round_id,
+                    date: round.round_date,
+                    totalScore,
+                    relativeToPar: totalScore - totalPar
+                };
+            })
+            .filter(r => r !== null);
+
+        if (roundStats.length === 0) {
             return {
                 hasData: false,
                 roundCount: 0,
@@ -83,21 +111,6 @@ const Statistics = {
             };
         }
 
-        // Calculate total par for the course
-        const totalPar = holes.reduce((sum, hole) => sum + (hole.par || 3), 0);
-
-        // Get scores for each round
-        const roundStats = completedRounds.map(round => {
-            const roundScores = scores.filter(s => s.round_id === round.round_id);
-            const totalScore = roundScores.reduce((sum, s) => sum + (s.throws || 0), 0);
-            return {
-                round_id: round.round_id,
-                date: round.round_date,
-                totalScore,
-                relativeToPar: totalScore - totalPar
-            };
-        });
-
         // Sort by total score
         roundStats.sort((a, b) => a.totalScore - b.totalScore);
 
@@ -106,7 +119,7 @@ const Statistics = {
 
         return {
             hasData: true,
-            roundCount: completedRounds.length,
+            roundCount: roundStats.length,
             avgTotalScore: Utils.roundTo(avgTotalScore, 1),
             avgRelativeToPar: Utils.roundTo(avgRelativeToPar, 1),
             bestRound: roundStats[0],
@@ -149,19 +162,6 @@ const Statistics = {
             isBetter,
             message
         };
-    },
-
-    /**
-     * Check if current round is a personal best
-     * @param {number} currentTotal - Current round total score
-     * @param {Object} courseStats - Course statistics
-     * @returns {boolean} Whether this is a personal best
-     */
-    isPersonalBest(currentTotal, courseStats) {
-        if (!courseStats.hasData || !courseStats.bestRound) {
-            return false;
-        }
-        return currentTotal < courseStats.bestRound.totalScore;
     },
 
     /**
@@ -275,26 +275,6 @@ const Statistics = {
             avgPutts: puttCount > 0 ? Utils.roundTo(totalPutts / puttCount, 1) : null,
             holesCompleted: scores.length
         };
-    },
-
-    /**
-     * Get trend data for a hole over time
-     * @param {string} holeId - The hole ID
-     * @param {Array} scores - All scores for this hole
-     * @param {Array} rounds - All rounds
-     * @returns {Array} Array of {date, score} objects
-     */
-    getHoleTrend(holeId, scores, rounds) {
-        const holeScores = scores.filter(s => s.hole_id === holeId);
-
-        return holeScores.map(score => {
-            const round = rounds.find(r => r.round_id === score.round_id);
-            return {
-                date: round ? round.round_date : null,
-                score: score.throws
-            };
-        }).filter(item => item.date !== null)
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 };
 

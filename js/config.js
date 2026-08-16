@@ -80,36 +80,33 @@ const CONFIG = {
         scores: 'dgtracker_scores',
         currentRound: 'dgtracker_current_round',
         pendingSync: 'dgtracker_pending_sync',
-        lastSync: 'dgtracker_last_sync',
-        userInfo: 'dgtracker_user_info'
-    },
-
-    // Sync settings
-    sync: {
-        // How often to attempt sync when online (in milliseconds)
-        interval: 30000, // 30 seconds
-        // Retry delay after failed sync (in milliseconds)
-        retryDelay: 5000, // 5 seconds
-        // Maximum retry attempts
-        maxRetries: 3
+        lastSync: 'dgtracker_last_sync'
     },
 
     // Toast notification settings
     toast: {
         // Default duration in milliseconds
-        duration: 3000,
-        // Long duration for important messages
-        longDuration: 5000
+        duration: 3000
     }
 };
 
+/**
+ * Recursively freeze an object and all its nested objects/arrays.
+ * A flat Object.freeze() only locks the top level and each direct child
+ * object — CONFIG.validation.courseName and the sheetHeaders.* arrays were
+ * still mutable underneath it.
+ * @param {*} obj
+ * @returns {*} The same object, deeply frozen
+ */
+function deepFreeze(obj) {
+    Object.getOwnPropertyNames(obj).forEach(key => {
+        const value = obj[key];
+        if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+            deepFreeze(value);
+        }
+    });
+    return Object.freeze(obj);
+}
+
 // Freeze the configuration to prevent accidental modifications
-Object.freeze(CONFIG);
-Object.freeze(CONFIG.api);
-Object.freeze(CONFIG.sheets);
-Object.freeze(CONFIG.sheetHeaders);
-Object.freeze(CONFIG.validation);
-Object.freeze(CONFIG.statistics);
-Object.freeze(CONFIG.storageKeys);
-Object.freeze(CONFIG.sync);
-Object.freeze(CONFIG.toast);
+deepFreeze(CONFIG);

@@ -359,33 +359,6 @@
     });
 
     // =========================================
-    // groupBy Tests
-    // =========================================
-
-    test('groupBy groups items correctly', function() {
-        const items = [
-            { type: 'a', val: 1 },
-            { type: 'b', val: 2 },
-            { type: 'a', val: 3 }
-        ];
-        const result = Utils.groupBy(items, 'type');
-        assertEqual(result.a.length, 2);
-        assertEqual(result.b.length, 1);
-    });
-
-    // =========================================
-    // deepClone Tests
-    // =========================================
-
-    test('deepClone creates independent copy', function() {
-        const original = { a: { b: 1 } };
-        const clone = Utils.deepClone(original);
-        clone.a.b = 2;
-        assertEqual(original.a.b, 1, 'Original should not be modified');
-        assertEqual(clone.a.b, 2, 'Clone should have new value');
-    });
-
-    // =========================================
     // Hole Sorting Tests
     // =========================================
     // These tests verify the hole sorting pattern used in app.js

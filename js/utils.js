@@ -157,46 +157,6 @@ const Utils = {
     },
 
     /**
-     * Debounce a function
-     * @param {Function} func - The function to debounce
-     * @param {number} wait - Wait time in milliseconds
-     * @returns {Function} Debounced function
-     */
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    },
-
-    /**
-     * Check if the browser is online
-     * @returns {boolean} Online status
-     */
-    isOnline() {
-        return navigator.onLine;
-    },
-
-    /**
-     * Show a screen by ID
-     * @param {string} screenId - The ID of the screen to show
-     */
-    showScreen(screenId) {
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.remove('active');
-        });
-        const targetScreen = document.getElementById(screenId);
-        if (targetScreen) {
-            targetScreen.classList.add('active');
-        }
-    },
-
-    /**
      * Show the loading overlay
      * @param {string} message - Loading message to display
      */
@@ -283,15 +243,6 @@ const Utils = {
     },
 
     /**
-     * Deep clone an object
-     * @param {object} obj - The object to clone
-     * @returns {object} Cloned object
-     */
-    deepClone(obj) {
-        return JSON.parse(JSON.stringify(obj));
-    },
-
-    /**
      * Sort an array of objects by a key
      * @param {Array} array - The array to sort
      * @param {string} key - The key to sort by
@@ -304,21 +255,6 @@ const Utils = {
             if (a[key] > b[key]) return ascending ? 1 : -1;
             return 0;
         });
-    },
-
-    /**
-     * Group an array of objects by a key
-     * @param {Array} array - The array to group
-     * @param {string} key - The key to group by
-     * @returns {object} Grouped object
-     */
-    groupBy(array, key) {
-        return array.reduce((groups, item) => {
-            const value = item[key];
-            groups[value] = groups[value] || [];
-            groups[value].push(item);
-            return groups;
-        }, {});
     }
 };
 

@@ -31,6 +31,9 @@ const App = {
             // Set up event listeners
             this.setupEventListeners();
 
+            // Single-source the numeric input bounds from CONFIG.validation
+            this.applyValidationBounds();
+
             // Check online status
             this.updateOnlineStatus();
 
@@ -88,6 +91,7 @@ const App = {
 
         // Header buttons
         document.getElementById('back-btn').addEventListener('click', () => this.handleBack());
+        document.getElementById('header-title').addEventListener('click', () => this.showScreen('home'));
 
         // Setup wizard
         document.getElementById('setup-connect-btn').addEventListener('click', () => this.handleSetupConnect());
@@ -104,6 +108,8 @@ const App = {
 
         // New course form
         document.getElementById('new-course-form').addEventListener('submit', (e) => this.handleNewCourseSubmit(e));
+        document.getElementById('course-name').addEventListener('input', () => this.clearNewCourseFieldError('course-name'));
+        document.getElementById('hole-count').addEventListener('input', () => this.clearNewCourseFieldError('hole-count'));
 
         // Scoring navigation
         document.getElementById('prev-hole-btn').addEventListener('click', () => this.navigateHole(-1));
@@ -122,6 +128,11 @@ const App = {
         // Incomplete round modal
         document.getElementById('continue-round-btn').addEventListener('click', () => this.handleContinueRound());
         document.getElementById('abandon-round-btn').addEventListener('click', () => this.handleAbandonRound());
+
+        // Dialog dismissal (Escape + backdrop click), in addition to each
+        // modal's own explicit close control (finding 18).
+        this.setupModalDismissal('scorecard-modal', () => this.hideScorecard());
+        this.setupModalDismissal('incomplete-round-modal', () => this.dismissIncompleteRoundModal());
 
         // Stepper buttons
         document.querySelectorAll('.btn-stepper').forEach(btn => {
@@ -156,6 +167,28 @@ const App = {
     },
 
     /**
+     * Wire Escape and backdrop-click dismissal for a modal dialog.
+     * @param {string} modalId - The modal element's ID
+     * @param {Function} onDismiss - Called to close the modal
+     */
+    setupModalDismissal(modalId, onDismiss) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                onDismiss();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                onDismiss();
+            }
+        });
+    },
+
+    /**
      * Handle stepper button clicks
      */
     handleStepper(event) {
@@ -178,6 +211,31 @@ const App = {
 
         input.value = value;
         input.dispatchEvent(new Event('input'));
+    },
+
+    /**
+     * Set each numeric input's min/max from CONFIG.validation, so the HTML
+     * markup's attributes reflect CONFIG rather than being an independently
+     * hand-maintained third copy of every bound (finding 24).
+     */
+    applyValidationBounds() {
+        const bounds = [
+            ['hole-count', CONFIG.validation.holeCount],
+            ['setup-par', CONFIG.validation.par],
+            ['edit-par', CONFIG.validation.par],
+            ['setup-distance', CONFIG.validation.distance],
+            ['edit-distance', CONFIG.validation.distance],
+            ['score-throws', CONFIG.validation.throws],
+            ['score-approaches', CONFIG.validation.approaches],
+            ['score-putts', CONFIG.validation.putts]
+        ];
+        bounds.forEach(([id, { min, max }]) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.min = min;
+                input.max = max;
+            }
+        });
     },
 
     /**
@@ -377,11 +435,34 @@ const App = {
     },
 
     /**
-     * Check for incomplete round
+     * Load a course's rounds and their scores, reading scores via the
+     * round_id index rather than a full getAll('scores') + JS filter.
+     * Previously duplicated three times (selectCourse, loadRoundData,
+     * showCourseStats) — all with the same shape (finding 24).
+     * @param {string} courseId
+     * @returns {Promise<{rounds: Array, scores: Array}>}
+     */
+    async loadCourseRoundsAndScores(courseId) {
+        const rounds = await Storage.getByIndex('rounds', 'course_id', courseId);
+        const completedRoundIds = rounds.filter(r => r.completed).map(r => r.round_id);
+
+        let scores = [];
+        if (completedRoundIds.length > 0) {
+            const scoresByRound = await Promise.all(
+                completedRoundIds.map(roundId => Storage.getByIndex('scores', 'round_id', roundId))
+            );
+            scores = scoresByRound.flat();
+        }
+
+        return { rounds, scores };
+    },
+
+    /**
+     * Check for incomplete or completed-but-unsynced round
      */
     checkIncompleteRound() {
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             // Ensure holes are sorted by hole_number
             if (savedRound.holes && savedRound.holes.length > 0) {
                 savedRound.holes.sort((a, b) => a.hole_number - b.hole_number);
@@ -432,6 +513,10 @@ const App = {
             case 'new-course':
                 Utils.setHeaderTitle('New Course');
                 Utils.showBackButton(true);
+                // A validation error from a previous visit must not persist
+                // once the user returns to the form (finding 18).
+                this.clearNewCourseFieldError('course-name');
+                this.clearNewCourseFieldError('hole-count');
                 break;
             case 'scoring':
                 Utils.setHeaderTitle(this.state.currentRound?.courseName || 'Scoring');
@@ -458,6 +543,10 @@ const App = {
             case 'scoring':
                 if (confirm('Leave round? Your progress will be saved.')) {
                     this.saveCurrentRoundState();
+                    // The round is saved but checkIncompleteRound() only runs
+                    // at init — without this, the home screen offered no way
+                    // back in until the app reloaded (finding 7).
+                    Utils.toggleElement('resume-round-btn', true);
                     this.showScreen('home');
                 }
                 break;
@@ -470,9 +559,12 @@ const App = {
      * Handle create new course button click
      */
     handleNewCourse() {
-        // Check for incomplete round
+        // Check for a pending round — incomplete OR completed-but-unsaved.
+        // A completed round is not yet synced (Save & Finish hasn't run),
+        // so silently proceeding here would overwrite it with no resume
+        // path (finding 1 — Chewie's held item 1 on PR #13).
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             this.showIncompleteRoundModal();
             return;
         }
@@ -484,9 +576,10 @@ const App = {
      * Handle selecting a course from the home screen
      */
     handleSelectCourseFromHome(course) {
-        // Check for incomplete round
+        // Check for a pending round — incomplete OR completed-but-unsaved
+        // (see handleNewCourse above).
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             this.showIncompleteRoundModal();
             return;
         }
@@ -506,9 +599,17 @@ const App = {
             }
             this.state.currentRound = savedRound;
             this.state.currentHoleIndex = savedRound.currentHoleIndex || 0;
-            this.loadRoundData();
-            this.showScreen('scoring');
-            this.renderScoringScreen();
+
+            if (savedRound.completed) {
+                // Finished but not yet saved/synced — go straight back to the
+                // summary screen so the user can re-attempt Save & Finish.
+                this.showScreen('summary');
+                this.renderSummary();
+            } else {
+                this.loadRoundData();
+                this.showScreen('scoring');
+                this.renderScoringScreen();
+            }
         }
     },
 
@@ -522,6 +623,15 @@ const App = {
 
         message.textContent = `You have an incomplete round at ${savedRound.courseName}. Would you like to continue or start a new round?`;
         modal.classList.remove('hidden');
+        document.getElementById('continue-round-btn').focus();
+    },
+
+    /**
+     * Dismiss the incomplete-round modal without choosing continue/abandon
+     * (Escape or backdrop click) — leaves the pending round exactly as-is.
+     */
+    dismissIncompleteRoundModal() {
+        document.getElementById('incomplete-round-modal').classList.add('hidden');
     },
 
     /**
@@ -568,25 +678,53 @@ const App = {
             card.setAttribute('role', 'listitem');
             card.setAttribute('tabindex', '0');
             card.setAttribute('aria-label', `${course.course_name}, ${course.hole_count} holes${course.last_played ? `, last played ${Utils.formatDate(course.last_played)}` : ''}`);
-            card.innerHTML = `
-                <div class="course-card-body">
-                    <div class="course-card-info">
-                        <div class="course-card-name">${course.course_name}</div>
-                        <div class="course-card-details">
-                            <span>${course.hole_count} holes</span>
-                            ${course.last_played ? `<span>Last played: ${Utils.formatDate(course.last_played)}</span>` : ''}
-                        </div>
-                    </div>
-                    <button class="btn-icon course-card-stats-btn" aria-label="View stats for ${course.course_name}" title="Course Stats">
-                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                            <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                        </svg>
-                    </button>
-                </div>
+
+            // course.course_name can arrive from syncFromSheets() — a
+            // hand-editable Sheet is untrusted input, unlike an in-app-created
+            // name (which CONFIG.validation.courseName.pattern constrains).
+            // Built with createElement/textContent, not innerHTML, so it is
+            // never interpreted as markup (finding 12).
+            const body = document.createElement('div');
+            body.className = 'course-card-body';
+
+            const info = document.createElement('div');
+            info.className = 'course-card-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'course-card-name';
+            nameEl.textContent = course.course_name;
+            info.appendChild(nameEl);
+
+            const details = document.createElement('div');
+            details.className = 'course-card-details';
+
+            const holesSpan = document.createElement('span');
+            holesSpan.textContent = `${course.hole_count} holes`;
+            details.appendChild(holesSpan);
+
+            if (course.last_played) {
+                const lastPlayedSpan = document.createElement('span');
+                lastPlayedSpan.textContent = `Last played: ${Utils.formatDate(course.last_played)}`;
+                details.appendChild(lastPlayedSpan);
+            }
+            info.appendChild(details);
+            body.appendChild(info);
+
+            const statsBtn = document.createElement('button');
+            statsBtn.className = 'btn-icon course-card-stats-btn';
+            // setAttribute does not parse markup, so this is safe even
+            // though course_name is untrusted.
+            statsBtn.setAttribute('aria-label', `View stats for ${course.course_name}`);
+            statsBtn.title = 'Course Stats';
+            statsBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
             `;
+            body.appendChild(statsBtn);
+            card.appendChild(body);
 
             // Stats button click (stop propagation so it doesn't start a round)
-            const statsBtn = card.querySelector('.course-card-stats-btn');
             statsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showCourseStats(course);
@@ -623,14 +761,7 @@ const App = {
             holes.sort((a, b) => a.hole_number - b.hole_number);
 
             // Load historical data
-            let rounds = await Storage.getByIndex('rounds', 'course_id', course.course_id);
-            let scores = [];
-
-            if (rounds.length > 0) {
-                const roundIds = rounds.filter(r => r.completed).map(r => r.round_id);
-                scores = await Storage.getAll('scores');
-                scores = scores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(course.course_id);
 
             // Calculate statistics
             this.state.holeStats = Statistics.calculateCourseHoleStats(holes, scores);
@@ -666,6 +797,15 @@ const App = {
     },
 
     /**
+     * Clear a new-course form field's error message and .error state
+     * @param {string} fieldId - 'course-name' or 'hole-count'
+     */
+    clearNewCourseFieldError(fieldId) {
+        document.getElementById(`${fieldId}-error`).textContent = '';
+        document.getElementById(fieldId).classList.remove('error');
+    },
+
+    /**
      * Handle new course form submission
      */
     async handleNewCourseSubmit(event) {
@@ -677,6 +817,11 @@ const App = {
         const name = nameInput.value.trim();
         const holeCount = parseInt(holeCountInput.value, 10);
 
+        // Clear any error left over from a previous failed submit before
+        // re-validating (finding 18).
+        this.clearNewCourseFieldError('course-name');
+        this.clearNewCourseFieldError('hole-count');
+
         // Validate
         const validation = Utils.validateCourseName(name);
         if (!validation.isValid) {
@@ -685,8 +830,9 @@ const App = {
             return;
         }
 
-        if (!Utils.isValidNumber(holeCount, 1, 27)) {
-            document.getElementById('hole-count-error').textContent = 'Hole count must be between 1 and 27';
+        if (!Utils.isValidNumber(holeCount, CONFIG.validation.holeCount.min, CONFIG.validation.holeCount.max)) {
+            document.getElementById('hole-count-error').textContent =
+                `Hole count must be between ${CONFIG.validation.holeCount.min} and ${CONFIG.validation.holeCount.max}`;
             holeCountInput.classList.add('error');
             return;
         }
@@ -751,14 +897,7 @@ const App = {
 
         // Load statistics if not a new course
         if (!this.state.currentRound.isNewCourse) {
-            let rounds = await Storage.getByIndex('rounds', 'course_id', courseId);
-            let scores = [];
-
-            if (rounds.length > 0) {
-                const roundIds = rounds.filter(r => r.completed).map(r => r.round_id);
-                scores = await Storage.getAll('scores');
-                scores = scores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(courseId);
 
             this.state.holeStats = Statistics.calculateCourseHoleStats(
                 this.state.currentRound.holes, scores
@@ -843,9 +982,9 @@ const App = {
             }
 
             // Show statistics
+            Utils.toggleElement(statsSection, true);
             const stats = this.state.holeStats[hole.hole_id];
             if (stats && stats.hasData) {
-                Utils.toggleElement(statsSection, true);
                 document.getElementById('avg-score').textContent = stats.avgScore ? stats.avgScore.toFixed(1) : '--';
                 document.getElementById('avg-approaches').textContent =
                     stats.hasEnoughApproachData && stats.avgApproaches
@@ -856,7 +995,6 @@ const App = {
                         ? stats.avgPutts.toFixed(1)
                         : 'N/A';
             } else {
-                Utils.toggleElement(statsSection, true);
                 document.getElementById('avg-score').textContent = '--';
                 document.getElementById('avg-approaches').textContent = '--';
                 document.getElementById('avg-putts').textContent = '--';
@@ -902,24 +1040,30 @@ const App = {
     },
 
     /**
-     * Validate all score entry fields
+     * Validate score entry values — the pure rule core, no DOM reads.
+     * Extracted so tests exercise the real rules instead of a hand-copy
+     * (finding 19); validateScoreEntry() below is now just the DOM adapter.
+     * @param {{throws: *, approaches: *, putts: *}} values - Raw input
+     *   values (string or number); approaches/putts may be '' for "not
+     *   provided".
      * @returns {Object} Validation result with isValid and errors array
      */
-    validateScoreEntry() {
+    validateScoreValues({ throws: throwsRaw, approaches: approachesRaw, putts: puttsRaw }) {
         const errors = [];
-        const throwsInput = document.getElementById('score-throws');
-        const approachesInput = document.getElementById('score-approaches');
-        const puttsInput = document.getElementById('score-putts');
 
-        const throws = parseInt(throwsInput.value, 10);
-        const approachesValue = approachesInput.value.trim();
-        const puttsValue = puttsInput.value.trim();
+        const throwsBounds = CONFIG.validation.throws;
+        const approachesBounds = CONFIG.validation.approaches;
+        const puttsBounds = CONFIG.validation.putts;
 
-        // Validate throws (required, positive integer, 1-20 range)
-        if (isNaN(throws) || throws < 1) {
-            errors.push({ field: 'throws', message: 'Throws must be at least 1' });
-        } else if (throws > 20) {
-            errors.push({ field: 'throws', message: 'Throws cannot exceed 20' });
+        const throws = parseInt(throwsRaw, 10);
+        const approachesValue = String(approachesRaw ?? '').trim();
+        const puttsValue = String(puttsRaw ?? '').trim();
+
+        // Validate throws (required, positive integer)
+        if (isNaN(throws) || throws < throwsBounds.min) {
+            errors.push({ field: 'throws', message: `Throws must be at least ${throwsBounds.min}` });
+        } else if (throws > throwsBounds.max) {
+            errors.push({ field: 'throws', message: `Throws cannot exceed ${throwsBounds.max}` });
         } else if (!Number.isInteger(throws)) {
             errors.push({ field: 'throws', message: 'Throws must be a whole number' });
         }
@@ -927,10 +1071,10 @@ const App = {
         // Validate approaches (optional, non-negative integer if provided)
         if (approachesValue !== '') {
             const approaches = parseInt(approachesValue, 10);
-            if (isNaN(approaches) || approaches < 0) {
-                errors.push({ field: 'approaches', message: 'Approaches must be 0 or more' });
-            } else if (approaches > 19) {
-                errors.push({ field: 'approaches', message: 'Approaches cannot exceed 19' });
+            if (isNaN(approaches) || approaches < approachesBounds.min) {
+                errors.push({ field: 'approaches', message: `Approaches must be ${approachesBounds.min} or more` });
+            } else if (approaches > approachesBounds.max) {
+                errors.push({ field: 'approaches', message: `Approaches cannot exceed ${approachesBounds.max}` });
             } else if (!Number.isInteger(approaches)) {
                 errors.push({ field: 'approaches', message: 'Approaches must be a whole number' });
             }
@@ -939,10 +1083,10 @@ const App = {
         // Validate putts (optional, non-negative integer if provided)
         if (puttsValue !== '') {
             const putts = parseInt(puttsValue, 10);
-            if (isNaN(putts) || putts < 0) {
-                errors.push({ field: 'putts', message: 'Putts must be 0 or more' });
-            } else if (putts > 19) {
-                errors.push({ field: 'putts', message: 'Putts cannot exceed 19' });
+            if (isNaN(putts) || putts < puttsBounds.min) {
+                errors.push({ field: 'putts', message: `Putts must be ${puttsBounds.min} or more` });
+            } else if (putts > puttsBounds.max) {
+                errors.push({ field: 'putts', message: `Putts cannot exceed ${puttsBounds.max}` });
             } else if (!Number.isInteger(putts)) {
                 errors.push({ field: 'putts', message: 'Putts must be a whole number' });
             }
@@ -964,6 +1108,18 @@ const App = {
             isValid: errors.length === 0,
             errors: errors
         };
+    },
+
+    /**
+     * Validate all score entry fields (DOM adapter over validateScoreValues)
+     * @returns {Object} Validation result with isValid and errors array
+     */
+    validateScoreEntry() {
+        return this.validateScoreValues({
+            throws: document.getElementById('score-throws').value,
+            approaches: document.getElementById('score-approaches').value,
+            putts: document.getElementById('score-putts').value
+        });
     },
 
     /**
@@ -1045,10 +1201,15 @@ const App = {
                 return;
             }
             this.clearValidationErrors();
+            this.saveCurrentHoleScore();
+        } else {
+            // Going back never validates, but it must also never silently save
+            // a cleared/blank throws field as a 0-throw score (finding 8).
+            const throwsValue = document.getElementById('score-throws').value.trim();
+            if (throwsValue !== '') {
+                this.saveCurrentHoleScore();
+            }
         }
-
-        // Save current hole first
-        this.saveCurrentHoleScore();
 
         const newIndex = this.state.currentHoleIndex + direction;
         if (newIndex >= 0 && newIndex < this.state.currentRound.holeCount) {
@@ -1087,8 +1248,8 @@ const App = {
             hole_id: hole.hole_id,
             hole_number: holeIndex + 1,
             throws: throws,
-            approaches: approaches ? parseInt(approaches, 10) : 0,
-            putts: putts ? parseInt(putts, 10) : 0,
+            approaches: approaches ? parseInt(approaches, 10) : null,
+            putts: putts ? parseInt(putts, 10) : null,
             created_at: Utils.formatDateForStorage()
         };
 
@@ -1105,7 +1266,7 @@ const App = {
     /**
      * Handle save hole button click
      */
-    handleSaveHole() {
+    async handleSaveHole() {
         // Validate score entry before saving
         const validation = this.validateScoreEntry();
         if (!validation.isValid) {
@@ -1123,7 +1284,7 @@ const App = {
 
         if (holeIndex === round.holeCount - 1) {
             // Last hole - finish round
-            this.finishRound();
+            await this.finishRound();
         } else {
             // Go to next hole
             this.state.currentHoleIndex++;
@@ -1135,8 +1296,15 @@ const App = {
 
     /**
      * Finish the round and show summary
+     *
+     * A round becomes durable the moment it is finished, not when it is
+     * synced: the round and its scores are written to durable storage here,
+     * before the summary is even shown, so closing/reloading the app on the
+     * summary screen never loses the round (finding 1). Save & Finish
+     * (handleFinishRound) is then just the sync/close step over already-safe
+     * data.
      */
-    finishRound() {
+    async finishRound() {
         const round = this.state.currentRound;
 
         // Calculate totals
@@ -1144,6 +1312,17 @@ const App = {
         round.total_score = totals.totalScore;
         round.total_par = totals.totalPar;
         round.completed = true;
+
+        const roundData = {
+            round_id: round.round_id,
+            course_id: round.course_id,
+            round_date: round.round_date,
+            completed: true,
+            total_score: round.total_score,
+            total_par: round.total_par
+        };
+        await Storage.put('rounds', roundData);
+        await Storage.putMany('scores', round.scores);
 
         this.saveCurrentRoundState();
         this.showScreen('summary');
@@ -1254,6 +1433,7 @@ const App = {
         `;
 
         modal.classList.remove('hidden');
+        document.getElementById('close-scorecard-btn').focus();
     },
 
     /**
@@ -1265,9 +1445,25 @@ const App = {
 
     /**
      * Handle finish round button click
+     *
+     * By the time this runs, finishRound() has already made the round durable
+     * (finding 1). This is now purely the sync/close step: a failure here —
+     * online or offline — always leaves the round queued for retry, never
+     * silently local-only (finding 2).
      */
     async handleFinishRound() {
         Utils.showLoading('Saving round...');
+
+        // Tracks whether every pending-sync queue write actually persisted.
+        // addPendingSync() can itself fail (e.g. localStorage quota) and
+        // returns false rather than throwing — that must not be treated as
+        // "durably queued for retry" (finding 10 / Chewie's held item 3).
+        let pendingSyncOk = true;
+        const queue = async (op) => {
+            const ok = await Storage.addPendingSync(op);
+            if (!ok) pendingSyncOk = false;
+            return ok;
+        };
 
         try {
             const round = this.state.currentRound;
@@ -1279,11 +1475,17 @@ const App = {
                 await Storage.putMany('holes', round.holes);
 
                 if (this.state.isOnline && SheetsAPI.isConfigured()) {
-                    await SheetsAPI.saveCourse(round.courseData);
-                    await SheetsAPI.saveHoles(round.holes);
+                    try {
+                        await SheetsAPI.saveCourse(round.courseData);
+                        await SheetsAPI.saveHoles(round.holes);
+                    } catch (syncError) {
+                        console.error('Failed to sync new course, queuing for retry:', syncError);
+                        await queue({ type: 'saveCourse', data: round.courseData });
+                        await queue({ type: 'saveHoles', data: round.holes });
+                    }
                 } else {
-                    await Storage.addPendingSync({ type: 'saveCourse', data: round.courseData });
-                    await Storage.addPendingSync({ type: 'saveHoles', data: round.holes });
+                    await queue({ type: 'saveCourse', data: round.courseData });
+                    await queue({ type: 'saveHoles', data: round.holes });
                 }
             }
 
@@ -1300,35 +1502,75 @@ const App = {
             await Storage.put('rounds', roundData);
             await Storage.putMany('scores', round.scores);
 
+            // Update the local course record's last_played immediately — for
+            // an existing course this previously only happened on the far
+            // side of a full syncFromSheets(), so the home screen kept
+            // sorting/showing the old date until a cold-start resync
+            // (finding 6). Independent of the Sheets sync outcome below.
+            if (!round.isNewCourse) {
+                const courses = await Storage.getAll('courses');
+                const course = courses.find(c => c.course_id === round.course_id);
+                if (course) {
+                    course.last_played = round.round_date;
+                    await Storage.put('courses', course);
+                }
+            }
+
             if (this.state.isOnline && SheetsAPI.isConfigured()) {
-                await SheetsAPI.saveRound(roundData);
-                await SheetsAPI.saveScores(round.scores);
-                await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                try {
+                    await SheetsAPI.saveRound(roundData);
+                    await SheetsAPI.saveScores(round.scores);
+                    // updateRowById returns false (rather than throwing) when
+                    // it detects a read-back mismatch — that must be treated
+                    // as a sync failure too, not silently accepted (finding 2).
+                    const lastPlayedOk = await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                    if (!lastPlayedOk) {
+                        throw new Error('updateCourseLastPlayed was not confirmed (read-back mismatch or course not found)');
+                    }
+                } catch (syncError) {
+                    console.error('Failed to sync round, queuing for retry:', syncError);
+                    await queue({ type: 'saveRound', data: roundData });
+                    await queue({ type: 'saveScores', data: round.scores });
+                    await queue({
+                        type: 'updateCourseLastPlayed',
+                        data: { courseId: round.course_id, date: round.round_date }
+                    });
+                }
             } else {
-                await Storage.addPendingSync({ type: 'saveRound', data: roundData });
-                await Storage.addPendingSync({ type: 'saveScores', data: round.scores });
-                await Storage.addPendingSync({
+                await queue({ type: 'saveRound', data: roundData });
+                await queue({ type: 'saveScores', data: round.scores });
+                await queue({
                     type: 'updateCourseLastPlayed',
                     data: { courseId: round.course_id, date: round.round_date }
                 });
             }
 
-            // Clear current round
-            Storage.clearCurrentRound();
-            this.state.currentRound = null;
-            this.state.currentHoleIndex = 0;
-
-            // Reload courses
             await this.loadCachedData();
-
             Utils.hideLoading();
-            Utils.showToast('Round saved successfully!', 'success');
-            Utils.toggleElement('resume-round-btn', false);
+
+            if (pendingSyncOk) {
+                // Clear current round — safe now: it is either synced or durably queued for retry
+                Storage.clearCurrentRound();
+                this.state.currentRound = null;
+                this.state.currentHoleIndex = 0;
+                Utils.showToast('Round saved successfully!', 'success');
+                Utils.toggleElement('resume-round-btn', false);
+            } else {
+                // The round itself is already durably saved (finishRound()
+                // wrote it before Save & Finish ever ran) — but at least one
+                // retry-queue write failed, so keep currentRound around
+                // rather than claim it's safely queued.
+                Utils.showToast('Round saved locally, but the retry queue is full — reconnect soon.', 'warning');
+            }
             this.showScreen('home');
         } catch (error) {
+            // Reaching here means the local durable write itself failed — the
+            // round stays in currentRound (not cleared) so checkIncompleteRound()
+            // offers it again next load, the same recoverable state as a queued
+            // sync failure.
             console.error('Error saving round:', error);
             Utils.hideLoading();
-            Utils.showToast('Error saving round. Data saved locally.', 'warning');
+            Utils.showToast('Error saving round. Data saved locally — will retry.', 'warning');
             this.showScreen('home');
         }
     },
@@ -1370,8 +1612,8 @@ const App = {
         const hole = round.holes[this.state.currentHoleIndex];
         const newPar = parseInt(document.getElementById('edit-par').value, 10);
 
-        if (!Utils.isValidNumber(newPar, 2, 6)) {
-            Utils.showToast('Par must be between 2 and 6', 'error');
+        if (!Utils.isValidNumber(newPar, CONFIG.validation.par.min, CONFIG.validation.par.max)) {
+            Utils.showToast(`Par must be between ${CONFIG.validation.par.min} and ${CONFIG.validation.par.max}`, 'error');
             return;
         }
 
@@ -1415,8 +1657,8 @@ const App = {
         const distanceInput = document.getElementById('edit-distance').value.trim();
         const newDistance = distanceInput ? parseInt(distanceInput, 10) : null;
 
-        if (newDistance !== null && !Utils.isValidNumber(newDistance, 0, 1500)) {
-            Utils.showToast('Distance must be between 0 and 1500', 'error');
+        if (newDistance !== null && !Utils.isValidNumber(newDistance, CONFIG.validation.distance.min, CONFIG.validation.distance.max)) {
+            Utils.showToast(`Distance must be between ${CONFIG.validation.distance.min} and ${CONFIG.validation.distance.max}`, 'error');
             return;
         }
 
@@ -1491,16 +1733,33 @@ const App = {
         // Update in IndexedDB
         await Storage.put('holes', hole);
 
+        // addPendingSync() can itself fail (e.g. localStorage quota) and
+        // returns false rather than throwing — surface that instead of
+        // silently reporting the edit as queued (finding 10).
+        const queue = async () => {
+            const ok = await Storage.addPendingSync({ type: 'updateHole', data: hole });
+            if (!ok) {
+                Utils.showToast('Could not queue the hole edit for retry — storage is full.', 'warning');
+            }
+        };
+
         // Sync to Google Sheets
         if (this.state.isOnline && SheetsAPI.isConfigured()) {
             try {
-                await SheetsAPI.updateHole(hole);
+                // updateRowById returns false (rather than throwing) when it
+                // detects a read-back mismatch — that must still be queued
+                // for retry, not console.error'd and dropped (finding 2).
+                const ok = await SheetsAPI.updateHole(hole);
+                if (!ok) {
+                    console.error('Hole edit sync was not confirmed (read-back mismatch or hole not found), queuing for retry:', hole.hole_id);
+                    await queue();
+                }
             } catch (error) {
                 console.error('Failed to sync hole edit:', error);
-                await Storage.addPendingSync({ type: 'updateHole', data: hole });
+                await queue();
             }
         } else {
-            await Storage.addPendingSync({ type: 'updateHole', data: hole });
+            await queue();
         }
     },
 
@@ -1519,15 +1778,7 @@ const App = {
             const holes = await Storage.getByIndex('holes', 'course_id', course.course_id);
             holes.sort((a, b) => a.hole_number - b.hole_number);
 
-            const rounds = await Storage.getByIndex('rounds', 'course_id', course.course_id);
-            const completedRounds = rounds.filter(r => r.completed);
-
-            let scores = [];
-            if (completedRounds.length > 0) {
-                const roundIds = completedRounds.map(r => r.round_id);
-                const allScores = await Storage.getAll('scores');
-                scores = allScores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(course.course_id);
 
             const stats = Statistics.calculateCourseStats(
                 course.course_id, rounds, scores, holes
@@ -1704,3 +1955,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Make App globally available for debugging
 window.App = App;
+
+// Single source for the app logo markup, previously duplicated verbatim in
+// two screens (index.html).
+const APP_LOGO_SVG = `<svg viewBox="0 0 100 100" width="64" height="64">
+    <circle cx="50" cy="50" r="45" fill="#0a0e14"/>
+    <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#00d4ff" stroke-width="3"/>
+    <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#00d4ff" stroke-width="2" opacity="0.7"/>
+    <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#00d4ff" stroke-width="3"/>
+    <rect x="47" y="52" width="6" height="25" fill="#00d4ff"/>
+    <ellipse cx="50" cy="77" rx="12" ry="4" fill="#00d4ff"/>
+</svg>`;
+
+document.querySelectorAll('[data-app-logo]').forEach(el => {
+    el.innerHTML = APP_LOGO_SVG;
+});

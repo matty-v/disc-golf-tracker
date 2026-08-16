@@ -34,8 +34,11 @@ const context = {
             classList: { add: () => {}, remove: () => {}, toggle: () => {} },
             appendChild: () => {},
             textContent: ''
-        })
+        }),
+        addEventListener: () => {}
     },
+    indexedDB: undefined,
+    fetch: () => Promise.reject(new Error('fetch not stubbed for this test')),
     localStorage: {
         _data: {},
         getItem(key) { return this._data[key] || null; },
@@ -88,11 +91,25 @@ try {
     loadScript(path.join(jsDir, 'statistics.js'));
     console.log('  Loaded: statistics.js');
 
+    // Load storage, sheets-api, app (needed to test the real round-flow,
+    // storage and sync logic instead of hand-maintained copies)
+    loadScript(path.join(jsDir, 'storage.js'));
+    console.log('  Loaded: storage.js');
+
+    loadScript(path.join(jsDir, 'sheets-api.js'));
+    console.log('  Loaded: sheets-api.js');
+
+    loadScript(path.join(jsDir, 'app.js'));
+    console.log('  Loaded: app.js');
+
     // Load test runner
     loadScript(path.join(testsDir, 'test-runner.js'));
     console.log('  Loaded: test-runner.js');
 
     // Load test files
+    loadScript(path.join(testsDir, 'config.test.js'));
+    console.log('  Loaded: config.test.js');
+
     loadScript(path.join(testsDir, 'utils.test.js'));
     console.log('  Loaded: utils.test.js');
 
@@ -101,6 +118,21 @@ try {
 
     loadScript(path.join(testsDir, 'validation.test.js'));
     console.log('  Loaded: validation.test.js');
+
+    loadScript(path.join(testsDir, 'round-flow.test.js'));
+    console.log('  Loaded: round-flow.test.js');
+
+    loadScript(path.join(testsDir, 'storage.test.js'));
+    console.log('  Loaded: storage.test.js');
+
+    loadScript(path.join(testsDir, 'sync.test.js'));
+    console.log('  Loaded: sync.test.js');
+
+    loadScript(path.join(testsDir, 'security.test.js'));
+    console.log('  Loaded: security.test.js');
+
+    loadScript(path.join(testsDir, 'ui-behavior.test.js'));
+    console.log('  Loaded: ui-behavior.test.js');
 
     // Run tests
     context.TestRunner.run().then(results => {

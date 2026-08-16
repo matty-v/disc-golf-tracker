@@ -2,10 +2,10 @@
   "hosting": {
     "site": "disc-golf-voget",
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "tests/**", "scripts/**", "*.md"],
+    "ignore": ["firebase.json", "package.json", "**/.*", "**/node_modules/**", "tests/**", "scripts/**", "*.md"],
     "rewrites": [
       {
-        "source": "**",
+        "source": "**/!(*.*)",
         "destination": "/index.html"
       }
     ],
@@ -16,6 +16,36 @@
           {
             "key": "Cache-Control",
             "value": "no-cache"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://us-central1-kinetic-object-322814.cloudfunctions.net https://www.google-analytics.com https://www.google.com; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"
+          }
+        ]
+      },
+      {
+        "source": "**/!(*.*)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://us-central1-kinetic-object-322814.cloudfunctions.net https://www.google-analytics.com https://www.google.com; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://us-central1-kinetic-object-322814.cloudfunctions.net https://www.google-analytics.com https://www.google.com; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"
           }
         ]
       },
