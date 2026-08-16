@@ -365,41 +365,4 @@
         }
     });
 
-    // =========================================
-    // isPersonalBest Tests
-    // =========================================
-
-    test('isPersonalBest returns false for first round', function() {
-        setupMocks();
-        try {
-            const courseStats = { hasData: false };
-            const result = Statistics.isPersonalBest(50, courseStats);
-            assertFalse(result, 'Should not be personal best for first round');
-        } finally {
-            teardownMocks();
-        }
-    });
-
-    test('isPersonalBest returns true for new best score', function() {
-        setupMocks();
-        try {
-            const courseStats = { hasData: true, bestRound: { totalScore: 55 } };
-            const result = Statistics.isPersonalBest(50, courseStats);
-            assertTrue(result, 'Should be personal best');
-        } finally {
-            teardownMocks();
-        }
-    });
-
-    test('isPersonalBest returns false when not beating best', function() {
-        setupMocks();
-        try {
-            const courseStats = { hasData: true, bestRound: { totalScore: 50 } };
-            const result = Statistics.isPersonalBest(55, courseStats);
-            assertFalse(result, 'Should not be personal best');
-        } finally {
-            teardownMocks();
-        }
-    });
-
 })();

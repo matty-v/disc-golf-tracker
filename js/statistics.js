@@ -165,19 +165,6 @@ const Statistics = {
     },
 
     /**
-     * Check if current round is a personal best
-     * @param {number} currentTotal - Current round total score
-     * @param {Object} courseStats - Course statistics
-     * @returns {boolean} Whether this is a personal best
-     */
-    isPersonalBest(currentTotal, courseStats) {
-        if (!courseStats.hasData || !courseStats.bestRound) {
-            return false;
-        }
-        return currentTotal < courseStats.bestRound.totalScore;
-    },
-
-    /**
      * Get best and worst holes from a round compared to averages
      * @param {Array} roundScores - Scores from the current round
      * @param {Array} holes - Holes for the course
@@ -288,26 +275,6 @@ const Statistics = {
             avgPutts: puttCount > 0 ? Utils.roundTo(totalPutts / puttCount, 1) : null,
             holesCompleted: scores.length
         };
-    },
-
-    /**
-     * Get trend data for a hole over time
-     * @param {string} holeId - The hole ID
-     * @param {Array} scores - All scores for this hole
-     * @param {Array} rounds - All rounds
-     * @returns {Array} Array of {date, score} objects
-     */
-    getHoleTrend(holeId, scores, rounds) {
-        const holeScores = scores.filter(s => s.hole_id === holeId);
-
-        return holeScores.map(score => {
-            const round = rounds.find(r => r.round_id === score.round_id);
-            return {
-                date: round ? round.round_date : null,
-                score: score.throws
-            };
-        }).filter(item => item.date !== null)
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 };
 
