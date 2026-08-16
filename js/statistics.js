@@ -72,7 +72,35 @@ const Statistics = {
     calculateCourseStats(courseId, rounds, scores, holes) {
         const completedRounds = rounds.filter(r => r.completed);
 
-        if (completedRounds.length === 0) {
+        // Calculate total par for the course
+        const totalPar = holes.reduce((sum, hole) => sum + (hole.par || 3), 0);
+
+        // Get scores for each round. A round with no recorded scores (and no
+        // stored total_score) never counts — it must never displace a real
+        // round as the best, or drag the average down as if it scored 0.
+        const roundStats = completedRounds
+            .map(round => {
+                const roundScores = scores.filter(s => s.round_id === round.round_id);
+                const hasStoredTotal = round.total_score !== null && round.total_score !== undefined;
+
+                if (roundScores.length === 0 && !hasStoredTotal) {
+                    return null;
+                }
+
+                const totalScore = hasStoredTotal
+                    ? round.total_score
+                    : roundScores.reduce((sum, s) => sum + (s.throws || 0), 0);
+
+                return {
+                    round_id: round.round_id,
+                    date: round.round_date,
+                    totalScore,
+                    relativeToPar: totalScore - totalPar
+                };
+            })
+            .filter(r => r !== null);
+
+        if (roundStats.length === 0) {
             return {
                 hasData: false,
                 roundCount: 0,
@@ -83,21 +111,6 @@ const Statistics = {
             };
         }
 
-        // Calculate total par for the course
-        const totalPar = holes.reduce((sum, hole) => sum + (hole.par || 3), 0);
-
-        // Get scores for each round
-        const roundStats = completedRounds.map(round => {
-            const roundScores = scores.filter(s => s.round_id === round.round_id);
-            const totalScore = roundScores.reduce((sum, s) => sum + (s.throws || 0), 0);
-            return {
-                round_id: round.round_id,
-                date: round.round_date,
-                totalScore,
-                relativeToPar: totalScore - totalPar
-            };
-        });
-
         // Sort by total score
         roundStats.sort((a, b) => a.totalScore - b.totalScore);
 
@@ -106,7 +119,7 @@ const Statistics = {
 
         return {
             hasData: true,
-            roundCount: completedRounds.length,
+            roundCount: roundStats.length,
             avgTotalScore: Utils.roundTo(avgTotalScore, 1),
             avgRelativeToPar: Utils.roundTo(avgRelativeToPar, 1),
             bestRound: roundStats[0],

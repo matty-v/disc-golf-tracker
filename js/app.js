@@ -377,11 +377,11 @@ const App = {
     },
 
     /**
-     * Check for incomplete round
+     * Check for incomplete or completed-but-unsynced round
      */
     checkIncompleteRound() {
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             // Ensure holes are sorted by hole_number
             if (savedRound.holes && savedRound.holes.length > 0) {
                 savedRound.holes.sort((a, b) => a.hole_number - b.hole_number);
@@ -506,9 +506,17 @@ const App = {
             }
             this.state.currentRound = savedRound;
             this.state.currentHoleIndex = savedRound.currentHoleIndex || 0;
-            this.loadRoundData();
-            this.showScreen('scoring');
-            this.renderScoringScreen();
+
+            if (savedRound.completed) {
+                // Finished but not yet saved/synced — go straight back to the
+                // summary screen so the user can re-attempt Save & Finish.
+                this.showScreen('summary');
+                this.renderSummary();
+            } else {
+                this.loadRoundData();
+                this.showScreen('scoring');
+                this.renderScoringScreen();
+            }
         }
     },
 
@@ -1045,10 +1053,15 @@ const App = {
                 return;
             }
             this.clearValidationErrors();
+            this.saveCurrentHoleScore();
+        } else {
+            // Going back never validates, but it must also never silently save
+            // a cleared/blank throws field as a 0-throw score (finding 8).
+            const throwsValue = document.getElementById('score-throws').value.trim();
+            if (throwsValue !== '') {
+                this.saveCurrentHoleScore();
+            }
         }
-
-        // Save current hole first
-        this.saveCurrentHoleScore();
 
         const newIndex = this.state.currentHoleIndex + direction;
         if (newIndex >= 0 && newIndex < this.state.currentRound.holeCount) {
@@ -1087,8 +1100,8 @@ const App = {
             hole_id: hole.hole_id,
             hole_number: holeIndex + 1,
             throws: throws,
-            approaches: approaches ? parseInt(approaches, 10) : 0,
-            putts: putts ? parseInt(putts, 10) : 0,
+            approaches: approaches ? parseInt(approaches, 10) : null,
+            putts: putts ? parseInt(putts, 10) : null,
             created_at: Utils.formatDateForStorage()
         };
 
@@ -1105,7 +1118,7 @@ const App = {
     /**
      * Handle save hole button click
      */
-    handleSaveHole() {
+    async handleSaveHole() {
         // Validate score entry before saving
         const validation = this.validateScoreEntry();
         if (!validation.isValid) {
@@ -1123,7 +1136,7 @@ const App = {
 
         if (holeIndex === round.holeCount - 1) {
             // Last hole - finish round
-            this.finishRound();
+            await this.finishRound();
         } else {
             // Go to next hole
             this.state.currentHoleIndex++;
@@ -1135,8 +1148,15 @@ const App = {
 
     /**
      * Finish the round and show summary
+     *
+     * A round becomes durable the moment it is finished, not when it is
+     * synced: the round and its scores are written to durable storage here,
+     * before the summary is even shown, so closing/reloading the app on the
+     * summary screen never loses the round (finding 1). Save & Finish
+     * (handleFinishRound) is then just the sync/close step over already-safe
+     * data.
      */
-    finishRound() {
+    async finishRound() {
         const round = this.state.currentRound;
 
         // Calculate totals
@@ -1144,6 +1164,17 @@ const App = {
         round.total_score = totals.totalScore;
         round.total_par = totals.totalPar;
         round.completed = true;
+
+        const roundData = {
+            round_id: round.round_id,
+            course_id: round.course_id,
+            round_date: round.round_date,
+            completed: true,
+            total_score: round.total_score,
+            total_par: round.total_par
+        };
+        await Storage.put('rounds', roundData);
+        await Storage.putMany('scores', round.scores);
 
         this.saveCurrentRoundState();
         this.showScreen('summary');
@@ -1265,6 +1296,11 @@ const App = {
 
     /**
      * Handle finish round button click
+     *
+     * By the time this runs, finishRound() has already made the round durable
+     * (finding 1). This is now purely the sync/close step: a failure here —
+     * online or offline — always leaves the round queued for retry, never
+     * silently local-only (finding 2).
      */
     async handleFinishRound() {
         Utils.showLoading('Saving round...');
@@ -1279,8 +1315,14 @@ const App = {
                 await Storage.putMany('holes', round.holes);
 
                 if (this.state.isOnline && SheetsAPI.isConfigured()) {
-                    await SheetsAPI.saveCourse(round.courseData);
-                    await SheetsAPI.saveHoles(round.holes);
+                    try {
+                        await SheetsAPI.saveCourse(round.courseData);
+                        await SheetsAPI.saveHoles(round.holes);
+                    } catch (syncError) {
+                        console.error('Failed to sync new course, queuing for retry:', syncError);
+                        await Storage.addPendingSync({ type: 'saveCourse', data: round.courseData });
+                        await Storage.addPendingSync({ type: 'saveHoles', data: round.holes });
+                    }
                 } else {
                     await Storage.addPendingSync({ type: 'saveCourse', data: round.courseData });
                     await Storage.addPendingSync({ type: 'saveHoles', data: round.holes });
@@ -1301,9 +1343,19 @@ const App = {
             await Storage.putMany('scores', round.scores);
 
             if (this.state.isOnline && SheetsAPI.isConfigured()) {
-                await SheetsAPI.saveRound(roundData);
-                await SheetsAPI.saveScores(round.scores);
-                await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                try {
+                    await SheetsAPI.saveRound(roundData);
+                    await SheetsAPI.saveScores(round.scores);
+                    await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                } catch (syncError) {
+                    console.error('Failed to sync round, queuing for retry:', syncError);
+                    await Storage.addPendingSync({ type: 'saveRound', data: roundData });
+                    await Storage.addPendingSync({ type: 'saveScores', data: round.scores });
+                    await Storage.addPendingSync({
+                        type: 'updateCourseLastPlayed',
+                        data: { courseId: round.course_id, date: round.round_date }
+                    });
+                }
             } else {
                 await Storage.addPendingSync({ type: 'saveRound', data: roundData });
                 await Storage.addPendingSync({ type: 'saveScores', data: round.scores });
@@ -1313,7 +1365,7 @@ const App = {
                 });
             }
 
-            // Clear current round
+            // Clear current round — safe now: it is either synced or durably queued for retry
             Storage.clearCurrentRound();
             this.state.currentRound = null;
             this.state.currentHoleIndex = 0;
@@ -1326,9 +1378,13 @@ const App = {
             Utils.toggleElement('resume-round-btn', false);
             this.showScreen('home');
         } catch (error) {
+            // Reaching here means the local durable write itself failed — the
+            // round stays in currentRound (not cleared) so checkIncompleteRound()
+            // offers it again next load, the same recoverable state as a queued
+            // sync failure.
             console.error('Error saving round:', error);
             Utils.hideLoading();
-            Utils.showToast('Error saving round. Data saved locally.', 'warning');
+            Utils.showToast('Error saving round. Data saved locally — will retry.', 'warning');
             this.showScreen('home');
         }
     },

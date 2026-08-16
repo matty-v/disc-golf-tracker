@@ -240,6 +240,46 @@
         }
     });
 
+    test('calculateCourseStats never lets a scoreless round become Best Round 0', function() {
+        setupMocks();
+        try {
+            const holes = [
+                { hole_id: 'h1', par: 3 },
+                { hole_id: 'h2', par: 3 }
+            ];
+            const rounds = [
+                { round_id: 'r1', completed: true, total_score: 7, total_par: 6 },
+                { round_id: 'r2', completed: true, total_score: null, total_par: null }
+            ];
+            // r2 is completed but has no recorded scores at all (finding 3).
+            const scores = [
+                { round_id: 'r1', hole_id: 'h1', throws: 3 },
+                { round_id: 'r1', hole_id: 'h2', throws: 4 }
+            ];
+            const result = Statistics.calculateCourseStats('course-1', rounds, scores, holes);
+            assertTrue(result.hasData, 'hasData should be true');
+            assertEqual(result.roundCount, 1, 'the scoreless round must not be counted');
+            assertEqual(result.bestRound.totalScore, 7, 'the real round must remain best, not a fabricated 0');
+            assertEqual(result.avgTotalScore, 7, 'the scoreless round must not drag the average down to 0');
+        } finally {
+            teardownMocks();
+        }
+    });
+
+    test('calculateCourseStats prefers a round\'s stored total_score over resumming scores', function() {
+        setupMocks();
+        try {
+            const holes = [{ hole_id: 'h1', par: 3 }];
+            const rounds = [{ round_id: 'r1', completed: true, total_score: 99 }];
+            // Deliberately mismatched scores array — total_score is the source of truth.
+            const scores = [{ round_id: 'r1', hole_id: 'h1', throws: 3 }];
+            const result = Statistics.calculateCourseStats('course-1', rounds, scores, holes);
+            assertEqual(result.avgTotalScore, 99, 'the stored total_score must be preferred over resumming scores');
+        } finally {
+            teardownMocks();
+        }
+    });
+
     // =========================================
     // compareToAverage Tests
     // =========================================
