@@ -998,18 +998,20 @@ const App = {
     },
 
     /**
-     * Validate all score entry fields
+     * Validate score entry values — the pure rule core, no DOM reads.
+     * Extracted so tests exercise the real rules instead of a hand-copy
+     * (finding 19); validateScoreEntry() below is now just the DOM adapter.
+     * @param {{throws: *, approaches: *, putts: *}} values - Raw input
+     *   values (string or number); approaches/putts may be '' for "not
+     *   provided".
      * @returns {Object} Validation result with isValid and errors array
      */
-    validateScoreEntry() {
+    validateScoreValues({ throws: throwsRaw, approaches: approachesRaw, putts: puttsRaw }) {
         const errors = [];
-        const throwsInput = document.getElementById('score-throws');
-        const approachesInput = document.getElementById('score-approaches');
-        const puttsInput = document.getElementById('score-putts');
 
-        const throws = parseInt(throwsInput.value, 10);
-        const approachesValue = approachesInput.value.trim();
-        const puttsValue = puttsInput.value.trim();
+        const throws = parseInt(throwsRaw, 10);
+        const approachesValue = String(approachesRaw ?? '').trim();
+        const puttsValue = String(puttsRaw ?? '').trim();
 
         // Validate throws (required, positive integer, 1-20 range)
         if (isNaN(throws) || throws < 1) {
@@ -1060,6 +1062,18 @@ const App = {
             isValid: errors.length === 0,
             errors: errors
         };
+    },
+
+    /**
+     * Validate all score entry fields (DOM adapter over validateScoreValues)
+     * @returns {Object} Validation result with isValid and errors array
+     */
+    validateScoreEntry() {
+        return this.validateScoreValues({
+            throws: document.getElementById('score-throws').value,
+            approaches: document.getElementById('score-approaches').value,
+            putts: document.getElementById('score-putts').value
+        });
     },
 
     /**
