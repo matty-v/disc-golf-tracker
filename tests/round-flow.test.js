@@ -268,6 +268,69 @@
         }
     });
 
+    // =========================================
+    // last_played updates locally on an existing course (finding 6)
+    // =========================================
+
+    test('handleFinishRound updates the local course last_played date for an existing course', async function() {
+        setupDOM();
+        resetStorage();
+        const originalIsOnline = App.state.isOnline;
+        try {
+            App.state.isOnline = false; // isolate from SheetsAPI entirely
+
+            await Storage.put('courses', { course_id: 'course-1', course_name: 'Test Course', hole_count: 1, last_played: null });
+
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.isNewCourse = false;
+            App.state.currentRound.round_date = '2026-08-16T12:00:00.000Z';
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 3, approaches: null, putts: null, created_at: new Date().toISOString() }
+            ];
+            App.state.currentRound.total_score = 3;
+            App.state.currentRound.total_par = 3;
+            App.state.currentRound.completed = true;
+
+            await App.handleFinishRound();
+
+            const courses = await Storage.getAll('courses');
+            const course = courses.find(c => c.course_id === 'course-1');
+            assertEqual(course.last_played, '2026-08-16T12:00:00.000Z', 'the local course record must reflect the new last-played date immediately, without a full resync');
+        } finally {
+            App.state.isOnline = originalIsOnline;
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // Resume button stays available after backing out (finding 7)
+    // =========================================
+
+    test('handleBack shows resume-round-btn after backing out of an in-progress round', function() {
+        setupDOM();
+        resetStorage();
+        try {
+            App.state.currentScreen = 'scoring';
+            App.state.currentRound = makeRound(2);
+            // The real button starts class="hidden" (index.html) — seed that
+            // so the assertion actually exercises the toggle, not a fake
+            // element's default (unset) classList.
+            el('resume-round-btn').classList.add('hidden');
+
+            const originalConfirm = globalThis.confirm;
+            globalThis.confirm = () => true;
+            try {
+                App.handleBack();
+            } finally {
+                globalThis.confirm = originalConfirm;
+            }
+
+            assertFalse(el('resume-round-btn').classList.contains('hidden'), 'resume-round-btn must be visible immediately after backing out, not just after a reload');
+        } finally {
+            teardownDOM();
+        }
+    });
+
     test('navigateHole(-1) still saves a real entered score', function() {
         setupDOM();
         try {

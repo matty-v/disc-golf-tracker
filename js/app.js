@@ -458,6 +458,10 @@ const App = {
             case 'scoring':
                 if (confirm('Leave round? Your progress will be saved.')) {
                     this.saveCurrentRoundState();
+                    // The round is saved but checkIncompleteRound() only runs
+                    // at init — without this, the home screen offered no way
+                    // back in until the app reloaded (finding 7).
+                    Utils.toggleElement('resume-round-btn', true);
                     this.showScreen('home');
                 }
                 break;
@@ -1341,6 +1345,20 @@ const App = {
 
             await Storage.put('rounds', roundData);
             await Storage.putMany('scores', round.scores);
+
+            // Update the local course record's last_played immediately — for
+            // an existing course this previously only happened on the far
+            // side of a full syncFromSheets(), so the home screen kept
+            // sorting/showing the old date until a cold-start resync
+            // (finding 6). Independent of the Sheets sync outcome below.
+            if (!round.isNewCourse) {
+                const courses = await Storage.getAll('courses');
+                const course = courses.find(c => c.course_id === round.course_id);
+                if (course) {
+                    course.last_played = round.round_date;
+                    await Storage.put('courses', course);
+                }
+            }
 
             if (this.state.isOnline && SheetsAPI.isConfigured()) {
                 try {
