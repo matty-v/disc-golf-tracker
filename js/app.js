@@ -105,6 +105,8 @@ const App = {
 
         // New course form
         document.getElementById('new-course-form').addEventListener('submit', (e) => this.handleNewCourseSubmit(e));
+        document.getElementById('course-name').addEventListener('input', () => this.clearNewCourseFieldError('course-name'));
+        document.getElementById('hole-count').addEventListener('input', () => this.clearNewCourseFieldError('hole-count'));
 
         // Scoring navigation
         document.getElementById('prev-hole-btn').addEventListener('click', () => this.navigateHole(-1));
@@ -123,6 +125,11 @@ const App = {
         // Incomplete round modal
         document.getElementById('continue-round-btn').addEventListener('click', () => this.handleContinueRound());
         document.getElementById('abandon-round-btn').addEventListener('click', () => this.handleAbandonRound());
+
+        // Dialog dismissal (Escape + backdrop click), in addition to each
+        // modal's own explicit close control (finding 18).
+        this.setupModalDismissal('scorecard-modal', () => this.hideScorecard());
+        this.setupModalDismissal('incomplete-round-modal', () => this.dismissIncompleteRoundModal());
 
         // Stepper buttons
         document.querySelectorAll('.btn-stepper').forEach(btn => {
@@ -154,6 +161,28 @@ const App = {
         // Validation on input
         document.getElementById('score-approaches').addEventListener('input', () => this.validateScoreDetails());
         document.getElementById('score-putts').addEventListener('input', () => this.validateScoreDetails());
+    },
+
+    /**
+     * Wire Escape and backdrop-click dismissal for a modal dialog.
+     * @param {string} modalId - The modal element's ID
+     * @param {Function} onDismiss - Called to close the modal
+     */
+    setupModalDismissal(modalId, onDismiss) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                onDismiss();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                onDismiss();
+            }
+        });
     },
 
     /**
@@ -433,6 +462,10 @@ const App = {
             case 'new-course':
                 Utils.setHeaderTitle('New Course');
                 Utils.showBackButton(true);
+                // A validation error from a previous visit must not persist
+                // once the user returns to the form (finding 18).
+                this.clearNewCourseFieldError('course-name');
+                this.clearNewCourseFieldError('hole-count');
                 break;
             case 'scoring':
                 Utils.setHeaderTitle(this.state.currentRound?.courseName || 'Scoring');
@@ -535,6 +568,15 @@ const App = {
 
         message.textContent = `You have an incomplete round at ${savedRound.courseName}. Would you like to continue or start a new round?`;
         modal.classList.remove('hidden');
+        document.getElementById('continue-round-btn').focus();
+    },
+
+    /**
+     * Dismiss the incomplete-round modal without choosing continue/abandon
+     * (Escape or backdrop click) — leaves the pending round exactly as-is.
+     */
+    dismissIncompleteRoundModal() {
+        document.getElementById('incomplete-round-modal').classList.add('hidden');
     },
 
     /**
@@ -707,6 +749,15 @@ const App = {
     },
 
     /**
+     * Clear a new-course form field's error message and .error state
+     * @param {string} fieldId - 'course-name' or 'hole-count'
+     */
+    clearNewCourseFieldError(fieldId) {
+        document.getElementById(`${fieldId}-error`).textContent = '';
+        document.getElementById(fieldId).classList.remove('error');
+    },
+
+    /**
      * Handle new course form submission
      */
     async handleNewCourseSubmit(event) {
@@ -717,6 +768,11 @@ const App = {
 
         const name = nameInput.value.trim();
         const holeCount = parseInt(holeCountInput.value, 10);
+
+        // Clear any error left over from a previous failed submit before
+        // re-validating (finding 18).
+        this.clearNewCourseFieldError('course-name');
+        this.clearNewCourseFieldError('hole-count');
 
         // Validate
         const validation = Utils.validateCourseName(name);
@@ -884,9 +940,9 @@ const App = {
             }
 
             // Show statistics
+            Utils.toggleElement(statsSection, true);
             const stats = this.state.holeStats[hole.hole_id];
             if (stats && stats.hasData) {
-                Utils.toggleElement(statsSection, true);
                 document.getElementById('avg-score').textContent = stats.avgScore ? stats.avgScore.toFixed(1) : '--';
                 document.getElementById('avg-approaches').textContent =
                     stats.hasEnoughApproachData && stats.avgApproaches
@@ -897,7 +953,6 @@ const App = {
                         ? stats.avgPutts.toFixed(1)
                         : 'N/A';
             } else {
-                Utils.toggleElement(statsSection, true);
                 document.getElementById('avg-score').textContent = '--';
                 document.getElementById('avg-approaches').textContent = '--';
                 document.getElementById('avg-putts').textContent = '--';
@@ -1318,6 +1373,7 @@ const App = {
         `;
 
         modal.classList.remove('hidden');
+        document.getElementById('close-scorecard-btn').focus();
     },
 
     /**
@@ -1807,3 +1863,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Make App globally available for debugging
 window.App = App;
+
+// Single source for the app logo markup, previously duplicated verbatim in
+// two screens (index.html).
+const APP_LOGO_SVG = `<svg viewBox="0 0 100 100" width="64" height="64">
+    <circle cx="50" cy="50" r="45" fill="#0a0e14"/>
+    <ellipse cx="50" cy="32" rx="22" ry="8" fill="none" stroke="#00d4ff" stroke-width="3"/>
+    <path d="M28 32 L40 52 M38 32 L45 52 M50 40 L50 52 M62 32 L55 52 M72 32 L60 52" stroke="#00d4ff" stroke-width="2" opacity="0.7"/>
+    <ellipse cx="50" cy="52" rx="18" ry="6" fill="none" stroke="#00d4ff" stroke-width="3"/>
+    <rect x="47" y="52" width="6" height="25" fill="#00d4ff"/>
+    <ellipse cx="50" cy="77" rx="12" ry="4" fill="#00d4ff"/>
+</svg>`;
+
+document.querySelectorAll('[data-app-logo]').forEach(el => {
+    el.innerHTML = APP_LOGO_SVG;
+});

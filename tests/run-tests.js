@@ -128,6 +128,9 @@ try {
     loadScript(path.join(testsDir, 'security.test.js'));
     console.log('  Loaded: security.test.js');
 
+    loadScript(path.join(testsDir, 'ui-behavior.test.js'));
+    console.log('  Loaded: ui-behavior.test.js');
+
     // Run tests
     context.TestRunner.run().then(results => {
         console.log('\n');
