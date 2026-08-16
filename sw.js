@@ -6,9 +6,12 @@
  * for API calls.
  */
 
-const CACHE_NAME = 'disc-golf-tracker-v6';
-const STATIC_CACHE_NAME = 'disc-golf-static-v6';
-const DATA_CACHE_NAME = 'disc-golf-data-v6';
+const STATIC_CACHE_NAME = 'disc-golf-static-v7';
+const DATA_CACHE_NAME = 'disc-golf-data-v7';
+
+// Needed to know the backend API's origin for fetch routing below.
+importScripts('./js/config.js');
+const API_ORIGIN = new URL(CONFIG.api.baseUrl).origin;
 
 // Files to cache for offline use (relative paths for GCS deployment)
 const STATIC_FILES = [
@@ -21,15 +24,10 @@ const STATIC_FILES = [
     './js/sheets-api.js',
     './js/statistics.js',
     './js/app.js',
+    './js/analytics.js',
     './manifest.json',
     './icons/icon-192.png',
     './icons/icon-512.png'
-];
-
-// External resources that should be cached
-const EXTERNAL_RESOURCES = [
-    'https://apis.google.com/js/api.js',
-    'https://accounts.google.com/gsi/client'
 ];
 
 /**
@@ -100,15 +98,15 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Handle Google API requests - network first with cache fallback
-    if (url.hostname.includes('googleapis.com') ||
-        url.hostname.includes('google.com') ||
-        url.hostname.includes('gstatic.com')) {
+    // Route the configured backend API network-first with cache fallback, so
+    // edits made elsewhere (another device, or directly in the Sheet) show up
+    // without a full reload. Everything else — same-origin static assets and
+    // external CDN resources (fonts, analytics) — is cache-first (finding 5).
+    if (url.origin === API_ORIGIN) {
         event.respondWith(networkFirst(request));
         return;
     }
 
-    // Handle app requests - cache first with network fallback
     event.respondWith(cacheFirst(request));
 });
 
@@ -246,7 +244,6 @@ self.addEventListener('push', (event) => {
         const options = {
             body: data.body || 'New notification',
             icon: '/icons/icon-192.png',
-            badge: '/icons/icon-72.png',
             vibrate: [100, 50, 100],
             data: {
                 url: data.url || '/'

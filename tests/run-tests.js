@@ -119,6 +119,12 @@ try {
     loadScript(path.join(testsDir, 'round-flow.test.js'));
     console.log('  Loaded: round-flow.test.js');
 
+    loadScript(path.join(testsDir, 'storage.test.js'));
+    console.log('  Loaded: storage.test.js');
+
+    loadScript(path.join(testsDir, 'sync.test.js'));
+    console.log('  Loaded: sync.test.js');
+
     // Run tests
     context.TestRunner.run().then(results => {
         console.log('\n');

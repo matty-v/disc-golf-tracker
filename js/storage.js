@@ -8,7 +8,7 @@
 const Storage = {
     // IndexedDB database name and version
     dbName: 'DiscGolfTrackerDB',
-    dbVersion: 1,
+    dbVersion: 2,
     db: null,
 
     /**
@@ -58,8 +58,12 @@ const Storage = {
                     scoresStore.createIndex('hole_id', 'hole_id', { unique: false });
                 }
 
-                if (!db.objectStoreNames.contains('pendingSync')) {
-                    db.createObjectStore('pendingSync', { keyPath: 'id', autoIncrement: true });
+                // The pendingSync queue actually lives in localStorage (see
+                // addPendingSync below) — this IndexedDB store was never read
+                // from or written to. Drop it; on an upgrade from dbVersion 1
+                // this also removes it from devices that already created it.
+                if (db.objectStoreNames.contains('pendingSync')) {
+                    db.deleteObjectStore('pendingSync');
                 }
             };
         });
@@ -88,12 +92,15 @@ const Storage = {
      * Set a value in localStorage
      * @param {string} key - The storage key
      * @param {*} value - The value to store
+     * @returns {boolean} Whether the write succeeded
      */
     set(key, value) {
         try {
             localStorage.setItem(key, JSON.stringify(value));
+            return true;
         } catch (error) {
             console.error('Storage set error:', error);
+            return false;
         }
     },
 
@@ -133,31 +140,6 @@ const Storage = {
             request.onerror = () => {
                 console.error('getAll error:', request.error);
                 resolve([]);
-            };
-        });
-    },
-
-    /**
-     * Get an item by ID from IndexedDB
-     * @param {string} storeName - The store name
-     * @param {string} id - The item ID
-     * @returns {Promise<Object|null>} The item or null
-     */
-    async getById(storeName, id) {
-        if (!this.db) {
-            const items = this.get(CONFIG.storageKeys[storeName]) || [];
-            return items.find(item => item[`${storeName.slice(0, -1)}_id`] === id) || null;
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(storeName, 'readonly');
-            const store = transaction.objectStore(storeName);
-            const request = store.get(id);
-
-            request.onsuccess = () => resolve(request.result || null);
-            request.onerror = () => {
-                console.error('getById error:', request.error);
-                resolve(null);
             };
         });
     },
@@ -206,8 +188,7 @@ const Storage = {
             } else {
                 items.push(item);
             }
-            this.set(CONFIG.storageKeys[storeName], items);
-            return true;
+            return this.set(CONFIG.storageKeys[storeName], items);
         }
 
         return new Promise((resolve, reject) => {
@@ -231,9 +212,15 @@ const Storage = {
      */
     async putMany(storeName, items) {
         if (!this.db) {
-            // Fallback to localStorage - replace all
-            this.set(CONFIG.storageKeys[storeName], items);
-            return true;
+            // Fallback to localStorage - merge by key, matching the per-item
+            // put() semantics IndexedDB gives us. Replacing wholesale here
+            // would silently discard existing local-only records that a
+            // partial sync doesn't include (finding 9).
+            const keyField = `${storeName.slice(0, -1)}_id`;
+            const existing = this.get(CONFIG.storageKeys[storeName]) || [];
+            const byKey = new Map(existing.map(item => [item[keyField], item]));
+            items.forEach(item => byKey.set(item[keyField], item));
+            return this.set(CONFIG.storageKeys[storeName], Array.from(byKey.values()));
         }
 
         return new Promise((resolve, reject) => {
@@ -317,8 +304,7 @@ const Storage = {
             ...operation,
             timestamp: new Date().toISOString()
         });
-        this.set(CONFIG.storageKeys.pendingSync, pending);
-        return true;
+        return this.set(CONFIG.storageKeys.pendingSync, pending);
     },
 
     /**
@@ -327,23 +313,6 @@ const Storage = {
      */
     getPendingSync() {
         return this.get(CONFIG.storageKeys.pendingSync) || [];
-    },
-
-    /**
-     * Remove a pending sync operation
-     * @param {number} index - The index to remove
-     */
-    removePendingSync(index) {
-        const pending = this.get(CONFIG.storageKeys.pendingSync) || [];
-        pending.splice(index, 1);
-        this.set(CONFIG.storageKeys.pendingSync, pending);
-    },
-
-    /**
-     * Clear all pending sync operations
-     */
-    clearPendingSync() {
-        this.set(CONFIG.storageKeys.pendingSync, []);
     },
 
     // ===================
@@ -394,33 +363,6 @@ const Storage = {
     },
 
     // ===================
-    // User Info
-    // ===================
-
-    /**
-     * Save user info
-     * @param {Object} userInfo - The user info to save
-     */
-    setUserInfo(userInfo) {
-        this.set(CONFIG.storageKeys.userInfo, userInfo);
-    },
-
-    /**
-     * Get user info
-     * @returns {Object|null} The user info
-     */
-    getUserInfo() {
-        return this.get(CONFIG.storageKeys.userInfo);
-    },
-
-    /**
-     * Clear user info
-     */
-    clearUserInfo() {
-        this.remove(CONFIG.storageKeys.userInfo);
-    },
-
-    // ===================
     // Last Sync
     // ===================
 
@@ -429,14 +371,6 @@ const Storage = {
      */
     updateLastSync() {
         this.set(CONFIG.storageKeys.lastSync, new Date().toISOString());
-    },
-
-    /**
-     * Get last sync timestamp
-     * @returns {string|null} The last sync timestamp
-     */
-    getLastSync() {
-        return this.get(CONFIG.storageKeys.lastSync);
     }
 };
 

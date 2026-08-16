@@ -269,41 +269,6 @@ const SheetsAPI = {
             .sort((a, b) => a.hole_number - b.hole_number);
     },
 
-    /**
-     * Load all rounds for a course
-     * @param {string} courseId - The course ID
-     * @returns {Promise<Array>} Array of rounds
-     */
-    async loadRoundsForCourse(courseId) {
-        const allRounds = await this.getRows(CONFIG.sheets.rounds);
-        return allRounds
-            .filter(round => round.course_id === courseId && round.completed === 'TRUE')
-            .map(round => ({
-                ...round,
-                completed: round.completed === 'TRUE',
-                total_score: round.total_score ? parseInt(round.total_score, 10) : null,
-                total_par: round.total_par ? parseInt(round.total_par, 10) : null
-            }));
-    },
-
-    /**
-     * Load scores for specific rounds
-     * @param {Array<string>} roundIds - Array of round IDs
-     * @returns {Promise<Array>} Array of scores
-     */
-    async loadScoresForRounds(roundIds) {
-        const allScores = await this.getRows(CONFIG.sheets.scores);
-        return allScores
-            .filter(score => roundIds.includes(score.round_id))
-            .map(score => ({
-                ...score,
-                hole_number: parseInt(score.hole_number, 10),
-                throws: parseInt(score.throws, 10),
-                approaches: score.approaches ? parseInt(score.approaches, 10) : null,
-                putts: score.putts ? parseInt(score.putts, 10) : null
-            }));
-    },
-
     // ===================
     // Write Operations
     // ===================
@@ -319,15 +284,18 @@ const SheetsAPI = {
     },
 
     /**
-     * Save holes to Google Sheets
+     * Save holes to Google Sheets. Requests run concurrently — the backend
+     * has no batch-create endpoint, so this is a parallelisation win over
+     * one-request-per-row, not a true batch (Obi-wan's architecture, Open
+     * Question 1).
      * @param {Array<Object>} holes - Array of hole data
      * @returns {Promise<void>}
      */
     async saveHoles(holes) {
-        for (const hole of holes) {
+        await Promise.all(holes.map(hole => {
             const data = this.prepareRowData(hole, CONFIG.sheetHeaders.holes);
-            await this.createRow(CONFIG.sheets.holes, data);
-        }
+            return this.createRow(CONFIG.sheets.holes, data);
+        }));
     },
 
     /**
@@ -341,37 +309,60 @@ const SheetsAPI = {
     },
 
     /**
-     * Update a round in Google Sheets
-     * @param {Object} round - The round data
-     * @returns {Promise<boolean>} Success status
-     */
-    async updateRound(round) {
-        // Find the row index by round_id
-        const allRounds = await this.getRows(CONFIG.sheets.rounds);
-        const rowIndex = allRounds.findIndex(r => r.round_id === round.round_id);
-
-        if (rowIndex === -1) {
-            console.warn('Round not found for update:', round.round_id);
-            return false;
-        }
-
-        // Row index in API is 1-based, data starts at row 2
-        const apiRowIndex = rowIndex + 2;
-        const data = this.prepareRowData(round, CONFIG.sheetHeaders.rounds);
-        await this.updateRow(CONFIG.sheets.rounds, apiRowIndex, data);
-        return true;
-    },
-
-    /**
-     * Save scores to Google Sheets
+     * Save scores to Google Sheets. Requests run concurrently — see saveHoles.
      * @param {Array<Object>} scores - Array of score data
      * @returns {Promise<void>}
      */
     async saveScores(scores) {
-        for (const score of scores) {
+        await Promise.all(scores.map(score => {
             const data = this.prepareRowData(score, CONFIG.sheetHeaders.scores);
-            await this.createRow(CONFIG.sheets.scores, data);
+            return this.createRow(CONFIG.sheets.scores, data);
+        }));
+    },
+
+    /**
+     * Update a row identified by an ID field, with a post-write read-back
+     * verification.
+     *
+     * The backend only supports positional (row-index) writes: read the
+     * whole tab, locate the row, write to index+2. Between that read and
+     * the write, another writer — including a human editing the Sheet
+     * directly — can shift rows, and that race cannot be closed client-side
+     * (Obi-wan's architecture, Open Question 2). The read-back turns a
+     * silent wrong-row overwrite into a *detected*, retryable failure
+     * instead of a cure for the race itself.
+     * @param {string} sheetName - Sheet tab name
+     * @param {string} idField - The field that uniquely identifies the row
+     * @param {string} idValue - The ID value to locate
+     * @param {Array<string>} headers - The header fields for this sheet
+     * @param {(row: Object) => Object} mutate - Receives the located row, returns the row to write
+     * @returns {Promise<boolean>} Success status — false means the write was
+     *   not confirmed and the caller should queue it for retry
+     */
+    async updateRowById(sheetName, idField, idValue, headers, mutate) {
+        const allRows = await this.getRows(sheetName);
+        const rowIndex = allRows.findIndex(r => r[idField] === idValue);
+
+        if (rowIndex === -1) {
+            console.warn(`Row not found for update in ${sheetName}:`, idValue);
+            return false;
         }
+
+        const updatedRow = mutate(allRows[rowIndex]);
+        // Row index in API is 1-based, data starts at row 2
+        const apiRowIndex = rowIndex + 2;
+        const data = this.prepareRowData(updatedRow, headers);
+        await this.updateRow(sheetName, apiRowIndex, data);
+
+        // Confirm the row at that index is still the one we intended to write.
+        const verifyRows = await this.getRows(sheetName);
+        const verifyRow = verifyRows[apiRowIndex - 2];
+        if (!verifyRow || verifyRow[idField] !== idValue) {
+            console.error(`updateRowById: read-back mismatch for ${sheetName}`, idValue);
+            return false;
+        }
+
+        return true;
     },
 
     /**
@@ -381,22 +372,11 @@ const SheetsAPI = {
      * @returns {Promise<boolean>} Success status
      */
     async updateCourseLastPlayed(courseId, date) {
-        const allCourses = await this.getRows(CONFIG.sheets.courses);
-        const rowIndex = allCourses.findIndex(c => c.course_id === courseId);
-
-        if (rowIndex === -1) {
-            console.warn('Course not found for update:', courseId);
-            return false;
-        }
-
-        const course = allCourses[rowIndex];
-        course.last_played = date;
-
-        // Row index in API is 1-based, data starts at row 2
-        const apiRowIndex = rowIndex + 2;
-        const data = this.prepareRowData(course, CONFIG.sheetHeaders.courses);
-        await this.updateRow(CONFIG.sheets.courses, apiRowIndex, data);
-        return true;
+        return this.updateRowById(CONFIG.sheets.courses, 'course_id', courseId, CONFIG.sheetHeaders.courses,
+            (course) => {
+                course.last_played = date;
+                return course;
+            });
     },
 
     /**
@@ -405,18 +385,8 @@ const SheetsAPI = {
      * @returns {Promise<boolean>} Success status
      */
     async updateHole(hole) {
-        const allHoles = await this.getRows(CONFIG.sheets.holes);
-        const rowIndex = allHoles.findIndex(h => h.hole_id === hole.hole_id);
-
-        if (rowIndex === -1) {
-            console.warn('Hole not found for update:', hole.hole_id);
-            return false;
-        }
-
-        const apiRowIndex = rowIndex + 2;
-        const data = this.prepareRowData(hole, CONFIG.sheetHeaders.holes);
-        await this.updateRow(CONFIG.sheets.holes, apiRowIndex, data);
-        return true;
+        return this.updateRowById(CONFIG.sheets.holes, 'hole_id', hole.hole_id, CONFIG.sheetHeaders.holes,
+            () => hole);
     },
 
     /**
@@ -446,12 +416,14 @@ const SheetsAPI = {
 
     /**
      * Sync all data from Google Sheets to local storage
+     *
+     * Does not drive the loading UI itself — the caller owns that (the API
+     * client driving UI directly was a module-boundary leak; see CLAUDE.md
+     * § Architecture).
      * @returns {Promise<boolean>} Success status
      */
     async syncFromSheets() {
         try {
-            Utils.showLoading('Syncing data...');
-
             // Load all data
             const courses = await this.loadCourses();
             const allHoles = await this.getRows(CONFIG.sheets.holes);
@@ -482,11 +454,9 @@ const SheetsAPI = {
             })));
 
             Storage.updateLastSync();
-            Utils.hideLoading();
             return true;
         } catch (error) {
             console.error('Sync error:', error);
-            Utils.hideLoading();
             throw error;
         }
     },
@@ -514,9 +484,6 @@ const SheetsAPI = {
                     case 'saveRound':
                         await this.saveRound(operation.data);
                         break;
-                    case 'updateRound':
-                        await this.updateRound(operation.data);
-                        break;
                     case 'saveScores':
                         await this.saveScores(operation.data);
                         break;
@@ -526,6 +493,13 @@ const SheetsAPI = {
                     case 'updateCourseLastPlayed':
                         await this.updateCourseLastPlayed(operation.data.courseId, operation.data.date);
                         break;
+                    default:
+                        // An unrecognised operation type must never be silently
+                        // dropped — keep it in the retry queue rather than
+                        // losing it (finding 10).
+                        console.error('Unrecognised pending-sync operation type:', operation.type);
+                        failed.push(operation);
+                        continue;
                 }
             } catch (error) {
                 console.error('Failed to process pending operation:', error);
