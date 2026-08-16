@@ -559,9 +559,12 @@ const App = {
      * Handle create new course button click
      */
     handleNewCourse() {
-        // Check for incomplete round
+        // Check for a pending round — incomplete OR completed-but-unsaved.
+        // A completed round is not yet synced (Save & Finish hasn't run),
+        // so silently proceeding here would overwrite it with no resume
+        // path (finding 1 — Chewie's held item 1 on PR #13).
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             this.showIncompleteRoundModal();
             return;
         }
@@ -573,9 +576,10 @@ const App = {
      * Handle selecting a course from the home screen
      */
     handleSelectCourseFromHome(course) {
-        // Check for incomplete round
+        // Check for a pending round — incomplete OR completed-but-unsaved
+        // (see handleNewCourse above).
         const savedRound = Storage.getCurrentRound();
-        if (savedRound && !savedRound.completed) {
+        if (savedRound) {
             this.showIncompleteRoundModal();
             return;
         }
@@ -1450,6 +1454,17 @@ const App = {
     async handleFinishRound() {
         Utils.showLoading('Saving round...');
 
+        // Tracks whether every pending-sync queue write actually persisted.
+        // addPendingSync() can itself fail (e.g. localStorage quota) and
+        // returns false rather than throwing — that must not be treated as
+        // "durably queued for retry" (finding 10 / Chewie's held item 3).
+        let pendingSyncOk = true;
+        const queue = async (op) => {
+            const ok = await Storage.addPendingSync(op);
+            if (!ok) pendingSyncOk = false;
+            return ok;
+        };
+
         try {
             const round = this.state.currentRound;
 
@@ -1465,12 +1480,12 @@ const App = {
                         await SheetsAPI.saveHoles(round.holes);
                     } catch (syncError) {
                         console.error('Failed to sync new course, queuing for retry:', syncError);
-                        await Storage.addPendingSync({ type: 'saveCourse', data: round.courseData });
-                        await Storage.addPendingSync({ type: 'saveHoles', data: round.holes });
+                        await queue({ type: 'saveCourse', data: round.courseData });
+                        await queue({ type: 'saveHoles', data: round.holes });
                     }
                 } else {
-                    await Storage.addPendingSync({ type: 'saveCourse', data: round.courseData });
-                    await Storage.addPendingSync({ type: 'saveHoles', data: round.holes });
+                    await queue({ type: 'saveCourse', data: round.courseData });
+                    await queue({ type: 'saveHoles', data: round.holes });
                 }
             }
 
@@ -1505,36 +1520,48 @@ const App = {
                 try {
                     await SheetsAPI.saveRound(roundData);
                     await SheetsAPI.saveScores(round.scores);
-                    await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                    // updateRowById returns false (rather than throwing) when
+                    // it detects a read-back mismatch — that must be treated
+                    // as a sync failure too, not silently accepted (finding 2).
+                    const lastPlayedOk = await SheetsAPI.updateCourseLastPlayed(round.course_id, round.round_date);
+                    if (!lastPlayedOk) {
+                        throw new Error('updateCourseLastPlayed was not confirmed (read-back mismatch or course not found)');
+                    }
                 } catch (syncError) {
                     console.error('Failed to sync round, queuing for retry:', syncError);
-                    await Storage.addPendingSync({ type: 'saveRound', data: roundData });
-                    await Storage.addPendingSync({ type: 'saveScores', data: round.scores });
-                    await Storage.addPendingSync({
+                    await queue({ type: 'saveRound', data: roundData });
+                    await queue({ type: 'saveScores', data: round.scores });
+                    await queue({
                         type: 'updateCourseLastPlayed',
                         data: { courseId: round.course_id, date: round.round_date }
                     });
                 }
             } else {
-                await Storage.addPendingSync({ type: 'saveRound', data: roundData });
-                await Storage.addPendingSync({ type: 'saveScores', data: round.scores });
-                await Storage.addPendingSync({
+                await queue({ type: 'saveRound', data: roundData });
+                await queue({ type: 'saveScores', data: round.scores });
+                await queue({
                     type: 'updateCourseLastPlayed',
                     data: { courseId: round.course_id, date: round.round_date }
                 });
             }
 
-            // Clear current round — safe now: it is either synced or durably queued for retry
-            Storage.clearCurrentRound();
-            this.state.currentRound = null;
-            this.state.currentHoleIndex = 0;
-
-            // Reload courses
             await this.loadCachedData();
-
             Utils.hideLoading();
-            Utils.showToast('Round saved successfully!', 'success');
-            Utils.toggleElement('resume-round-btn', false);
+
+            if (pendingSyncOk) {
+                // Clear current round — safe now: it is either synced or durably queued for retry
+                Storage.clearCurrentRound();
+                this.state.currentRound = null;
+                this.state.currentHoleIndex = 0;
+                Utils.showToast('Round saved successfully!', 'success');
+                Utils.toggleElement('resume-round-btn', false);
+            } else {
+                // The round itself is already durably saved (finishRound()
+                // wrote it before Save & Finish ever ran) — but at least one
+                // retry-queue write failed, so keep currentRound around
+                // rather than claim it's safely queued.
+                Utils.showToast('Round saved locally, but the retry queue is full — reconnect soon.', 'warning');
+            }
             this.showScreen('home');
         } catch (error) {
             // Reaching here means the local durable write itself failed — the
@@ -1706,16 +1733,33 @@ const App = {
         // Update in IndexedDB
         await Storage.put('holes', hole);
 
+        // addPendingSync() can itself fail (e.g. localStorage quota) and
+        // returns false rather than throwing — surface that instead of
+        // silently reporting the edit as queued (finding 10).
+        const queue = async () => {
+            const ok = await Storage.addPendingSync({ type: 'updateHole', data: hole });
+            if (!ok) {
+                Utils.showToast('Could not queue the hole edit for retry — storage is full.', 'warning');
+            }
+        };
+
         // Sync to Google Sheets
         if (this.state.isOnline && SheetsAPI.isConfigured()) {
             try {
-                await SheetsAPI.updateHole(hole);
+                // updateRowById returns false (rather than throwing) when it
+                // detects a read-back mismatch — that must still be queued
+                // for retry, not console.error'd and dropped (finding 2).
+                const ok = await SheetsAPI.updateHole(hole);
+                if (!ok) {
+                    console.error('Hole edit sync was not confirmed (read-back mismatch or hole not found), queuing for retry:', hole.hole_id);
+                    await queue();
+                }
             } catch (error) {
                 console.error('Failed to sync hole edit:', error);
-                await Storage.addPendingSync({ type: 'updateHole', data: hole });
+                await queue();
             }
         } else {
-            await Storage.addPendingSync({ type: 'updateHole', data: hole });
+            await queue();
         }
     },
 

@@ -202,6 +202,117 @@
         }
     });
 
+    test('handleFinishRound queues pending-sync when updateCourseLastPlayed returns false (detected read-back mismatch) instead of dropping it', async function() {
+        setupDOM();
+        resetStorage();
+        const originalIsOnline = App.state.isOnline;
+        const originalIsConfigured = SheetsAPI.isConfigured;
+        const originalSaveRound = SheetsAPI.saveRound;
+        const originalSaveScores = SheetsAPI.saveScores;
+        const originalUpdateCourseLastPlayed = SheetsAPI.updateCourseLastPlayed;
+        try {
+            App.state.isOnline = true;
+            SheetsAPI.isConfigured = () => true;
+            SheetsAPI.saveRound = async () => {};
+            SheetsAPI.saveScores = async () => {};
+            // updateRowById returns false (not a throw) on a read-back mismatch —
+            // this must not be silently dropped (finding 2 / Chewie's held item 2).
+            SheetsAPI.updateCourseLastPlayed = async () => false;
+
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 3, approaches: null, putts: null, created_at: new Date().toISOString() }
+            ];
+            App.state.currentRound.total_score = 3;
+            App.state.currentRound.total_par = 3;
+            App.state.currentRound.completed = true;
+
+            await App.handleFinishRound();
+
+            const pending = Storage.getPendingSync();
+            const types = pending.map(p => p.type);
+            assertTrue(types.includes('updateCourseLastPlayed'), 'a detected-but-unconfirmed write (false return, not a throw) must still be queued for retry');
+        } finally {
+            App.state.isOnline = originalIsOnline;
+            SheetsAPI.isConfigured = originalIsConfigured;
+            SheetsAPI.saveRound = originalSaveRound;
+            SheetsAPI.saveScores = originalSaveScores;
+            SheetsAPI.updateCourseLastPlayed = originalUpdateCourseLastPlayed;
+            teardownDOM();
+        }
+    });
+
+    test('persistHoleEdit queues pending-sync when updateHole returns false instead of dropping it', async function() {
+        setupDOM();
+        resetStorage();
+        const originalIsOnline = App.state.isOnline;
+        const originalIsConfigured = SheetsAPI.isConfigured;
+        const originalUpdateHole = SheetsAPI.updateHole;
+        try {
+            App.state.isOnline = true;
+            SheetsAPI.isConfigured = () => true;
+            SheetsAPI.updateHole = async () => false;
+
+            const hole = { hole_id: 'hole-1', course_id: 'course-1', hole_number: 1, par: 4, distance: 300, description: '' };
+            await App.persistHoleEdit(hole);
+
+            const pending = Storage.getPendingSync();
+            const types = pending.map(p => p.type);
+            assertTrue(types.includes('updateHole'), 'a detected-but-unconfirmed hole edit (false return, not a throw) must still be queued for retry');
+        } finally {
+            App.state.isOnline = originalIsOnline;
+            SheetsAPI.isConfigured = originalIsConfigured;
+            SheetsAPI.updateHole = originalUpdateHole;
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // A failed pending-sync write must not be treated as durably queued
+    // (finding 10 / Chewie's held item 3 on PR #13)
+    // =========================================
+
+    test('handleFinishRound does NOT clear the current round when a pending-sync write fails to persist', async function() {
+        setupDOM();
+        resetStorage();
+        const originalIsOnline = App.state.isOnline;
+        try {
+            // Genuinely offline, so every operation takes the addPendingSync path.
+            App.state.isOnline = false;
+
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 3, approaches: null, putts: null, created_at: new Date().toISOString() }
+            ];
+            // finishRound() first, exactly like the real flow — it's what
+            // actually writes the round into Storage's current-round key
+            // (via saveCurrentRoundState()), which is the thing that must
+            // survive handleFinishRound() below.
+            await App.finishRound();
+
+            const originalSetItem = localStorage.setItem;
+            const originalPendingSyncKey = CONFIG.storageKeys.pendingSync;
+            localStorage.setItem = (key, value) => {
+                if (key === originalPendingSyncKey) {
+                    throw new Error('QuotaExceededError');
+                }
+                return originalSetItem.call(localStorage, key, value);
+            };
+
+            try {
+                await App.handleFinishRound();
+            } finally {
+                localStorage.setItem = originalSetItem;
+            }
+
+            assertNotNull(App.state.currentRound, 'handleFinishRound must not clear currentRound when the pending-sync queue write itself failed — the round was never actually durably queued, contrary to the code\'s previous unchecked claim');
+            assertNotNull(Storage.getCurrentRound(), 'the round must remain recoverable in storage too, so checkIncompleteRound() can offer it again');
+        } finally {
+            App.state.isOnline = originalIsOnline;
+            teardownDOM();
+        }
+    });
+
     // =========================================
     // Blank optional fields store null, not 0 (finding 4)
     // =========================================
@@ -326,6 +437,62 @@
             }
 
             assertFalse(el('resume-round-btn').classList.contains('hidden'), 'resume-round-btn must be visible immediately after backing out, not just after a reload');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // A completed-but-unsaved round must never be silently overwritten
+    // by starting a new course or selecting a course from home (finding 1,
+    // Chewie's held item 1 on PR #13)
+    // =========================================
+
+    test('handleNewCourse shows the incomplete-round modal instead of overwriting a completed-but-unsaved round', function() {
+        setupDOM();
+        resetStorage();
+        try {
+            const finishedRound = makeRound(1);
+            finishedRound.completed = true;
+            Storage.saveCurrentRound(finishedRound);
+
+            let modalShown = false;
+            const originalShow = App.showIncompleteRoundModal;
+            App.showIncompleteRoundModal = () => { modalShown = true; };
+            try {
+                App.handleNewCourse();
+            } finally {
+                App.showIncompleteRoundModal = originalShow;
+            }
+
+            assertTrue(modalShown, 'a completed-but-unsaved round must trigger the incomplete-round modal, not silently proceed to the new-course form');
+            assertEqual(App.state.currentScreen, 'home', 'must not navigate to new-course while a finished-unsaved round is pending');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSelectCourseFromHome shows the incomplete-round modal instead of overwriting a completed-but-unsaved round', function() {
+        setupDOM();
+        resetStorage();
+        try {
+            const finishedRound = makeRound(1);
+            finishedRound.completed = true;
+            finishedRound.round_id = 'the-finished-round';
+            Storage.saveCurrentRound(finishedRound);
+            App.state.currentRound = finishedRound;
+
+            let modalShown = false;
+            const originalShow = App.showIncompleteRoundModal;
+            App.showIncompleteRoundModal = () => { modalShown = true; };
+            try {
+                App.handleSelectCourseFromHome({ course_id: 'other-course', course_name: 'Other Course', hole_count: 9 });
+            } finally {
+                App.showIncompleteRoundModal = originalShow;
+            }
+
+            assertTrue(modalShown, 'a completed-but-unsaved round must trigger the incomplete-round modal, not selectCourse()');
+            assertEqual(App.state.currentRound.round_id, 'the-finished-round', 'the finished round must not be overwritten by selecting a different course');
         } finally {
             teardownDOM();
         }
