@@ -125,6 +125,9 @@ try {
     loadScript(path.join(testsDir, 'sync.test.js'));
     console.log('  Loaded: sync.test.js');
 
+    loadScript(path.join(testsDir, 'security.test.js'));
+    console.log('  Loaded: security.test.js');
+
     // Run tests
     context.TestRunner.run().then(results => {
         console.log('\n');

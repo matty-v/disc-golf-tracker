@@ -16,6 +16,10 @@
           {
             "key": "Cache-Control",
             "value": "no-cache"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://us-central1-kinetic-object-322814.cloudfunctions.net https://www.google-analytics.com; img-src 'self' data:; base-uri 'self'; frame-ancestors 'self'"
           }
         ]
       },

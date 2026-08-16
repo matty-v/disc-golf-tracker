@@ -37,7 +37,7 @@
                     </svg>
                 </button>
             </div>
-            <h1 id="header-title" class="header-title" onclick="App.showScreen('home');">Disc Golf Tracker</h1>
+            <h1 id="header-title" class="header-title">Disc Golf Tracker</h1>
             <div class="header-right">
                 <div id="sync-status" class="sync-status hidden" title="Sync status">
                     <svg viewBox="0 0 24 24" width="20" height="20">
@@ -538,13 +538,7 @@
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-FWHGTTV1VH"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-
-        gtag('config', 'G-FWHGTTV1VH');
-    </script>
+    <script src="js/analytics.js"></script>
 
     <!-- Application Scripts -->
     <script src="js/config.js"></script>
@@ -555,19 +549,7 @@
     <script src="js/app.js"></script>
 
     <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registered:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('ServiceWorker registration failed:', error);
-                    });
-            });
-        }
-    </script>
+    <script src="js/register-sw.js"></script>
 
 </body>
 </html>

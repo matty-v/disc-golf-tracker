@@ -25,6 +25,7 @@ const STATIC_FILES = [
     './js/statistics.js',
     './js/app.js',
     './js/analytics.js',
+    './js/register-sw.js',
     './manifest.json',
     './icons/icon-192.png',
     './icons/icon-512.png'

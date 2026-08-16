@@ -88,6 +88,7 @@ const App = {
 
         // Header buttons
         document.getElementById('back-btn').addEventListener('click', () => this.handleBack());
+        document.getElementById('header-title').addEventListener('click', () => this.showScreen('home'));
 
         // Setup wizard
         document.getElementById('setup-connect-btn').addEventListener('click', () => this.handleSetupConnect());
@@ -580,25 +581,53 @@ const App = {
             card.setAttribute('role', 'listitem');
             card.setAttribute('tabindex', '0');
             card.setAttribute('aria-label', `${course.course_name}, ${course.hole_count} holes${course.last_played ? `, last played ${Utils.formatDate(course.last_played)}` : ''}`);
-            card.innerHTML = `
-                <div class="course-card-body">
-                    <div class="course-card-info">
-                        <div class="course-card-name">${course.course_name}</div>
-                        <div class="course-card-details">
-                            <span>${course.hole_count} holes</span>
-                            ${course.last_played ? `<span>Last played: ${Utils.formatDate(course.last_played)}</span>` : ''}
-                        </div>
-                    </div>
-                    <button class="btn-icon course-card-stats-btn" aria-label="View stats for ${course.course_name}" title="Course Stats">
-                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                            <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                        </svg>
-                    </button>
-                </div>
+
+            // course.course_name can arrive from syncFromSheets() — a
+            // hand-editable Sheet is untrusted input, unlike an in-app-created
+            // name (which CONFIG.validation.courseName.pattern constrains).
+            // Built with createElement/textContent, not innerHTML, so it is
+            // never interpreted as markup (finding 12).
+            const body = document.createElement('div');
+            body.className = 'course-card-body';
+
+            const info = document.createElement('div');
+            info.className = 'course-card-info';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'course-card-name';
+            nameEl.textContent = course.course_name;
+            info.appendChild(nameEl);
+
+            const details = document.createElement('div');
+            details.className = 'course-card-details';
+
+            const holesSpan = document.createElement('span');
+            holesSpan.textContent = `${course.hole_count} holes`;
+            details.appendChild(holesSpan);
+
+            if (course.last_played) {
+                const lastPlayedSpan = document.createElement('span');
+                lastPlayedSpan.textContent = `Last played: ${Utils.formatDate(course.last_played)}`;
+                details.appendChild(lastPlayedSpan);
+            }
+            info.appendChild(details);
+            body.appendChild(info);
+
+            const statsBtn = document.createElement('button');
+            statsBtn.className = 'btn-icon course-card-stats-btn';
+            // setAttribute does not parse markup, so this is safe even
+            // though course_name is untrusted.
+            statsBtn.setAttribute('aria-label', `View stats for ${course.course_name}`);
+            statsBtn.title = 'Course Stats';
+            statsBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
             `;
+            body.appendChild(statsBtn);
+            card.appendChild(body);
 
             // Stats button click (stop propagation so it doesn't start a round)
-            const statsBtn = card.querySelector('.course-card-stats-btn');
             statsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showCourseStats(course);
