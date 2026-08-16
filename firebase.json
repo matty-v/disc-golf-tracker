@@ -2,10 +2,10 @@
   "hosting": {
     "site": "disc-golf-voget",
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "tests/**", "scripts/**", "*.md"],
+    "ignore": ["firebase.json", "package.json", "**/.*", "**/node_modules/**", "tests/**", "scripts/**", "*.md"],
     "rewrites": [
       {
-        "source": "**",
+        "source": "**/!(*.*)",
         "destination": "/index.html"
       }
     ],

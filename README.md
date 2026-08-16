@@ -12,7 +12,7 @@ A mobile-first PWA for tracking disc golf rounds with Google Sheets storage.
 
 ## Live App
 
-https://storage.googleapis.com/disc-golf-tracker/index.html
+https://disc-golf-voget.web.app
 
 ## Development
 
@@ -27,23 +27,26 @@ npx http-server -p 8080
 ### Running Tests
 
 ```bash
+npm test
+# or directly:
 node tests/run-tests.js
 ```
 
 ## Deployment
 
-The app deploys automatically to GCS when changes are merged to `main`.
+The app deploys automatically to Firebase Hosting when changes are merged to
+`main`, gated on the test suite passing (`.github/workflows/deploy.yml`).
 
 Manual deployment:
 
 ```bash
-./scripts/deploy-gcs.sh disc-golf-tracker
+firebase deploy
 ```
 
 ## CI/CD
 
-- **Pull Requests**: Tests run automatically
-- **Merge to main**: Auto-deploys to GCS
+- **Pull Requests**: Tests run automatically, plus a Firebase Hosting preview channel (7-day expiry)
+- **Merge to main**: Tests run again, then auto-deploys to Firebase Hosting (`disc-golf-voget.web.app`)
 
 ## License
 

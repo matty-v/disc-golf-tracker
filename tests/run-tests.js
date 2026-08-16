@@ -107,6 +107,9 @@ try {
     console.log('  Loaded: test-runner.js');
 
     // Load test files
+    loadScript(path.join(testsDir, 'config.test.js'));
+    console.log('  Loaded: config.test.js');
+
     loadScript(path.join(testsDir, 'utils.test.js'));
     console.log('  Loaded: utils.test.js');
 

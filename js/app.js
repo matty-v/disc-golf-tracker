@@ -31,6 +31,9 @@ const App = {
             // Set up event listeners
             this.setupEventListeners();
 
+            // Single-source the numeric input bounds from CONFIG.validation
+            this.applyValidationBounds();
+
             // Check online status
             this.updateOnlineStatus();
 
@@ -208,6 +211,31 @@ const App = {
 
         input.value = value;
         input.dispatchEvent(new Event('input'));
+    },
+
+    /**
+     * Set each numeric input's min/max from CONFIG.validation, so the HTML
+     * markup's attributes reflect CONFIG rather than being an independently
+     * hand-maintained third copy of every bound (finding 24).
+     */
+    applyValidationBounds() {
+        const bounds = [
+            ['hole-count', CONFIG.validation.holeCount],
+            ['setup-par', CONFIG.validation.par],
+            ['edit-par', CONFIG.validation.par],
+            ['setup-distance', CONFIG.validation.distance],
+            ['edit-distance', CONFIG.validation.distance],
+            ['score-throws', CONFIG.validation.throws],
+            ['score-approaches', CONFIG.validation.approaches],
+            ['score-putts', CONFIG.validation.putts]
+        ];
+        bounds.forEach(([id, { min, max }]) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.min = min;
+                input.max = max;
+            }
+        });
     },
 
     /**
@@ -404,6 +432,29 @@ const App = {
      */
     async loadCachedData() {
         this.state.courses = await Storage.getAll('courses');
+    },
+
+    /**
+     * Load a course's rounds and their scores, reading scores via the
+     * round_id index rather than a full getAll('scores') + JS filter.
+     * Previously duplicated three times (selectCourse, loadRoundData,
+     * showCourseStats) — all with the same shape (finding 24).
+     * @param {string} courseId
+     * @returns {Promise<{rounds: Array, scores: Array}>}
+     */
+    async loadCourseRoundsAndScores(courseId) {
+        const rounds = await Storage.getByIndex('rounds', 'course_id', courseId);
+        const completedRoundIds = rounds.filter(r => r.completed).map(r => r.round_id);
+
+        let scores = [];
+        if (completedRoundIds.length > 0) {
+            const scoresByRound = await Promise.all(
+                completedRoundIds.map(roundId => Storage.getByIndex('scores', 'round_id', roundId))
+            );
+            scores = scoresByRound.flat();
+        }
+
+        return { rounds, scores };
     },
 
     /**
@@ -706,14 +757,7 @@ const App = {
             holes.sort((a, b) => a.hole_number - b.hole_number);
 
             // Load historical data
-            let rounds = await Storage.getByIndex('rounds', 'course_id', course.course_id);
-            let scores = [];
-
-            if (rounds.length > 0) {
-                const roundIds = rounds.filter(r => r.completed).map(r => r.round_id);
-                scores = await Storage.getAll('scores');
-                scores = scores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(course.course_id);
 
             // Calculate statistics
             this.state.holeStats = Statistics.calculateCourseHoleStats(holes, scores);
@@ -782,8 +826,9 @@ const App = {
             return;
         }
 
-        if (!Utils.isValidNumber(holeCount, 1, 27)) {
-            document.getElementById('hole-count-error').textContent = 'Hole count must be between 1 and 27';
+        if (!Utils.isValidNumber(holeCount, CONFIG.validation.holeCount.min, CONFIG.validation.holeCount.max)) {
+            document.getElementById('hole-count-error').textContent =
+                `Hole count must be between ${CONFIG.validation.holeCount.min} and ${CONFIG.validation.holeCount.max}`;
             holeCountInput.classList.add('error');
             return;
         }
@@ -848,14 +893,7 @@ const App = {
 
         // Load statistics if not a new course
         if (!this.state.currentRound.isNewCourse) {
-            let rounds = await Storage.getByIndex('rounds', 'course_id', courseId);
-            let scores = [];
-
-            if (rounds.length > 0) {
-                const roundIds = rounds.filter(r => r.completed).map(r => r.round_id);
-                scores = await Storage.getAll('scores');
-                scores = scores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(courseId);
 
             this.state.holeStats = Statistics.calculateCourseHoleStats(
                 this.state.currentRound.holes, scores
@@ -1009,15 +1047,19 @@ const App = {
     validateScoreValues({ throws: throwsRaw, approaches: approachesRaw, putts: puttsRaw }) {
         const errors = [];
 
+        const throwsBounds = CONFIG.validation.throws;
+        const approachesBounds = CONFIG.validation.approaches;
+        const puttsBounds = CONFIG.validation.putts;
+
         const throws = parseInt(throwsRaw, 10);
         const approachesValue = String(approachesRaw ?? '').trim();
         const puttsValue = String(puttsRaw ?? '').trim();
 
-        // Validate throws (required, positive integer, 1-20 range)
-        if (isNaN(throws) || throws < 1) {
-            errors.push({ field: 'throws', message: 'Throws must be at least 1' });
-        } else if (throws > 20) {
-            errors.push({ field: 'throws', message: 'Throws cannot exceed 20' });
+        // Validate throws (required, positive integer)
+        if (isNaN(throws) || throws < throwsBounds.min) {
+            errors.push({ field: 'throws', message: `Throws must be at least ${throwsBounds.min}` });
+        } else if (throws > throwsBounds.max) {
+            errors.push({ field: 'throws', message: `Throws cannot exceed ${throwsBounds.max}` });
         } else if (!Number.isInteger(throws)) {
             errors.push({ field: 'throws', message: 'Throws must be a whole number' });
         }
@@ -1025,10 +1067,10 @@ const App = {
         // Validate approaches (optional, non-negative integer if provided)
         if (approachesValue !== '') {
             const approaches = parseInt(approachesValue, 10);
-            if (isNaN(approaches) || approaches < 0) {
-                errors.push({ field: 'approaches', message: 'Approaches must be 0 or more' });
-            } else if (approaches > 19) {
-                errors.push({ field: 'approaches', message: 'Approaches cannot exceed 19' });
+            if (isNaN(approaches) || approaches < approachesBounds.min) {
+                errors.push({ field: 'approaches', message: `Approaches must be ${approachesBounds.min} or more` });
+            } else if (approaches > approachesBounds.max) {
+                errors.push({ field: 'approaches', message: `Approaches cannot exceed ${approachesBounds.max}` });
             } else if (!Number.isInteger(approaches)) {
                 errors.push({ field: 'approaches', message: 'Approaches must be a whole number' });
             }
@@ -1037,10 +1079,10 @@ const App = {
         // Validate putts (optional, non-negative integer if provided)
         if (puttsValue !== '') {
             const putts = parseInt(puttsValue, 10);
-            if (isNaN(putts) || putts < 0) {
-                errors.push({ field: 'putts', message: 'Putts must be 0 or more' });
-            } else if (putts > 19) {
-                errors.push({ field: 'putts', message: 'Putts cannot exceed 19' });
+            if (isNaN(putts) || putts < puttsBounds.min) {
+                errors.push({ field: 'putts', message: `Putts must be ${puttsBounds.min} or more` });
+            } else if (putts > puttsBounds.max) {
+                errors.push({ field: 'putts', message: `Putts cannot exceed ${puttsBounds.max}` });
             } else if (!Number.isInteger(putts)) {
                 errors.push({ field: 'putts', message: 'Putts must be a whole number' });
             }
@@ -1543,8 +1585,8 @@ const App = {
         const hole = round.holes[this.state.currentHoleIndex];
         const newPar = parseInt(document.getElementById('edit-par').value, 10);
 
-        if (!Utils.isValidNumber(newPar, 2, 6)) {
-            Utils.showToast('Par must be between 2 and 6', 'error');
+        if (!Utils.isValidNumber(newPar, CONFIG.validation.par.min, CONFIG.validation.par.max)) {
+            Utils.showToast(`Par must be between ${CONFIG.validation.par.min} and ${CONFIG.validation.par.max}`, 'error');
             return;
         }
 
@@ -1588,8 +1630,8 @@ const App = {
         const distanceInput = document.getElementById('edit-distance').value.trim();
         const newDistance = distanceInput ? parseInt(distanceInput, 10) : null;
 
-        if (newDistance !== null && !Utils.isValidNumber(newDistance, 0, 1500)) {
-            Utils.showToast('Distance must be between 0 and 1500', 'error');
+        if (newDistance !== null && !Utils.isValidNumber(newDistance, CONFIG.validation.distance.min, CONFIG.validation.distance.max)) {
+            Utils.showToast(`Distance must be between ${CONFIG.validation.distance.min} and ${CONFIG.validation.distance.max}`, 'error');
             return;
         }
 
@@ -1692,15 +1734,7 @@ const App = {
             const holes = await Storage.getByIndex('holes', 'course_id', course.course_id);
             holes.sort((a, b) => a.hole_number - b.hole_number);
 
-            const rounds = await Storage.getByIndex('rounds', 'course_id', course.course_id);
-            const completedRounds = rounds.filter(r => r.completed);
-
-            let scores = [];
-            if (completedRounds.length > 0) {
-                const roundIds = completedRounds.map(r => r.round_id);
-                const allScores = await Storage.getAll('scores');
-                scores = allScores.filter(s => roundIds.includes(s.round_id));
-            }
+            const { rounds, scores } = await this.loadCourseRoundsAndScores(course.course_id);
 
             const stats = Statistics.calculateCourseStats(
                 course.course_id, rounds, scores, holes

@@ -90,12 +90,23 @@ const CONFIG = {
     }
 };
 
+/**
+ * Recursively freeze an object and all its nested objects/arrays.
+ * A flat Object.freeze() only locks the top level and each direct child
+ * object — CONFIG.validation.courseName and the sheetHeaders.* arrays were
+ * still mutable underneath it.
+ * @param {*} obj
+ * @returns {*} The same object, deeply frozen
+ */
+function deepFreeze(obj) {
+    Object.getOwnPropertyNames(obj).forEach(key => {
+        const value = obj[key];
+        if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+            deepFreeze(value);
+        }
+    });
+    return Object.freeze(obj);
+}
+
 // Freeze the configuration to prevent accidental modifications
-Object.freeze(CONFIG);
-Object.freeze(CONFIG.api);
-Object.freeze(CONFIG.sheets);
-Object.freeze(CONFIG.sheetHeaders);
-Object.freeze(CONFIG.validation);
-Object.freeze(CONFIG.statistics);
-Object.freeze(CONFIG.storageKeys);
-Object.freeze(CONFIG.toast);
+deepFreeze(CONFIG);
