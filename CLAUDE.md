@@ -28,7 +28,7 @@ Zero-dependency vanilla JavaScript PWA with no build step. All source is plain E
 - **config.js** — Centralized constants: API endpoints, validation rules, storage keys. Deep-frozen (top level and everything nested) to prevent accidental mutation.
 - **storage.js** — Data persistence layer using IndexedDB (courses, holes, rounds, scores) and localStorage (settings, current round, offline sync queue).
 - **sheets-api.js** — Google Sheets API client via a Cloud Function backend (`sheetsApi` on GCP project `kinetic-object-322814`). Handles CRUD for all sheet tabs and sync operations.
-- **statistics.js** — Calculates hole-specific and course-aggregate stats (averages, best/worst rounds).
+- **statistics.js** — Calculates hole-specific and course-aggregate stats (averages, best/worst rounds), plus `isHoleCounted(score)` — the commit predicate (`approaches + putts === throws - 1`) that `app.js` uses to decide whether a hole counts toward the live round-score bar. This predicate never reaches a round's saved total: `calculateRunningTotal()` stays unfiltered, and `finishRound()`/`renderSummary()` call it with every hole that has throws, regardless of commit state.
 - **utils.js** — UUID generation, date formatting, score calculations, DOM helpers, toast notifications, input validation.
 
 ### Data Flow
