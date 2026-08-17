@@ -365,4 +365,37 @@
         }
     });
 
+    // =========================================
+    // isHoleCounted Tests (matty-v/disc-golf-tracker#3)
+    // approaches + putts === throws - 1 (the drive is always excluded)
+    // =========================================
+
+    test('isHoleCounted: exact match counts', function() {
+        assertTrue(Statistics.isHoleCounted({ throws: 4, approaches: 2, putts: 1 }), '2 + 1 === 4 - 1');
+    });
+
+    test('isHoleCounted: under-logged does not count', function() {
+        assertFalse(Statistics.isHoleCounted({ throws: 4, approaches: 1, putts: 1 }), '1 + 1 !== 4 - 1');
+    });
+
+    test('isHoleCounted: over-logged does not count either (the entry-time hard block is a separate concern)', function() {
+        assertFalse(Statistics.isHoleCounted({ throws: 4, approaches: 2, putts: 2 }), '2 + 2 !== 4 - 1');
+    });
+
+    test('isHoleCounted: an ace (1 throw, 0 approaches, 0 putts) counts', function() {
+        assertTrue(Statistics.isHoleCounted({ throws: 1, approaches: 0, putts: 0 }), '0 + 0 === 1 - 1');
+    });
+
+    test('isHoleCounted: null,null and 0,0 count identically', function() {
+        const withNulls = Statistics.isHoleCounted({ throws: 3, approaches: null, putts: null });
+        const withZeros = Statistics.isHoleCounted({ throws: 3, approaches: 0, putts: 0 });
+        assertEqual(withNulls, withZeros, 'the null/zero equivalence must be an explicit, tested property, not an accident (see finding 4 in #4)');
+        assertFalse(withNulls, '0 + 0 !== 3 - 1, so neither shape should count here');
+    });
+
+    test('isHoleCounted: a missing/zero throws never matches -1', function() {
+        assertFalse(Statistics.isHoleCounted({ throws: 0, approaches: -1, putts: 0 }), 'throws: 0 must not spuriously match approaches+putts === -1');
+        assertFalse(Statistics.isHoleCounted({ approaches: null, putts: null }), 'a score with no throws field at all must never count');
+    });
+
 })();

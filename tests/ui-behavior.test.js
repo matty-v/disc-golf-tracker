@@ -216,4 +216,65 @@
             teardownDOM();
         }
     });
+
+    // =========================================
+    // Skip-warning modal (matty-v/disc-golf-tracker#3) — a real modal, not
+    // window.confirm(), so it gets the app's Escape/backdrop-close behavior
+    // =========================================
+
+    test('confirmSkip shows the modal with the shortfall message and resolves true on Skip anyway', async function() {
+        setupDOM();
+        try {
+            const resultPromise = App.confirmSkip('log 3 more shots to match a 4');
+
+            assertFalse(el('skip-warning-modal').classList.contains('hidden'), 'confirmSkip must open the modal');
+            assertEqual(el('skip-warning-message').textContent, 'log 3 more shots to match a 4', 'the modal must name the exact gap');
+
+            App.resolveSkipWarning(true);
+            const result = await resultPromise;
+
+            assertTrue(result, '"Skip anyway" must resolve the promise true');
+            assertTrue(el('skip-warning-modal').classList.contains('hidden'), 'resolving must close the modal');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('confirmSkip resolves false on Finish logging', async function() {
+        setupDOM();
+        try {
+            const resultPromise = App.confirmSkip('log 1 more shot to match a 4');
+            App.resolveSkipWarning(false);
+            const result = await resultPromise;
+
+            assertFalse(result, '"Finish logging" must resolve the promise false');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('dismissSkipWarning (Escape/backdrop) resolves false, same as Finish logging', async function() {
+        setupDOM();
+        try {
+            const resultPromise = App.confirmSkip('log 2 more shots to match a 3');
+            App.dismissSkipWarning();
+            const result = await resultPromise;
+
+            assertFalse(result, 'dismissing via Escape/backdrop must be the safe default — stay and finish logging, not skip');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('the skip-warning modal is wired for Escape and backdrop dismissal like every other modal (#4)', function() {
+        setupDOM();
+        try {
+            App.setupModalDismissal('skip-warning-modal', () => App.dismissSkipWarning());
+
+            const modal = el('skip-warning-modal');
+            assertTrue(!!(modal._listeners.click && modal._listeners.click.length), 'a backdrop click listener must be registered');
+        } finally {
+            teardownDOM();
+        }
+    });
 })();

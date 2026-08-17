@@ -1087,6 +1087,86 @@ input[type="number"]::-webkit-inner-spin-button {
     color: var(--color-gray-800);
 }
 
+/* Commit-state line (matty-v/disc-golf-tracker#3) */
+.commit-state {
+    color: var(--color-gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: var(--spacing-xs);
+    min-height: 1em;
+}
+
+/* Round Score Bar */
+.round-score-bar {
+    background-color: var(--color-bg-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.round-score-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    text-transform: uppercase;
+    margin-bottom: var(--spacing-sm);
+}
+
+.round-score-body {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.round-score-relative {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.round-score-relative.under-par {
+    background-color: var(--color-birdie);
+    color: var(--color-bg-primary);
+}
+
+.round-score-relative.even-par {
+    background-color: var(--color-gray-300);
+    color: var(--color-gray-700);
+}
+
+.round-score-relative.over-par {
+    background-color: var(--color-bogey);
+    color: var(--color-bg-primary);
+}
+
+.round-score-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    flex: 1;
+    min-width: 0;
+}
+
+.round-score-progress {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+}
+
+.round-score-unlogged {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-bogey);
+}
+
+.round-score-details .btn {
+    align-self: flex-start;
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-sm);
+}
+
 /* Bottom Action Bar */
 .bottom-action {
     position: fixed;

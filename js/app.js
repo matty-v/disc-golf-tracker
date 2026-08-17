@@ -117,11 +117,15 @@ const App = {
         document.getElementById('save-hole-btn').addEventListener('click', () => this.handleSaveHole());
 
         // Score input change handlers
-        document.getElementById('score-throws').addEventListener('input', () => this.updateScoreRelative());
+        document.getElementById('score-throws').addEventListener('input', () => {
+            this.updateScoreRelative();
+            this.updateCommitState();
+        });
         document.getElementById('setup-par').addEventListener('input', () => this.updateScoreRelative());
 
         // Summary screen
         document.getElementById('view-scorecard-btn').addEventListener('click', () => this.showScorecard());
+        document.getElementById('round-score-scorecard-btn').addEventListener('click', () => this.showScorecard());
         document.getElementById('finish-round-btn').addEventListener('click', () => this.handleFinishRound());
         document.getElementById('close-scorecard-btn').addEventListener('click', () => this.hideScorecard());
 
@@ -129,10 +133,15 @@ const App = {
         document.getElementById('continue-round-btn').addEventListener('click', () => this.handleContinueRound());
         document.getElementById('abandon-round-btn').addEventListener('click', () => this.handleAbandonRound());
 
+        // Skip-warning modal (matty-v/disc-golf-tracker#3)
+        document.getElementById('skip-warning-finish-btn').addEventListener('click', () => this.resolveSkipWarning(false));
+        document.getElementById('skip-warning-skip-btn').addEventListener('click', () => this.resolveSkipWarning(true));
+
         // Dialog dismissal (Escape + backdrop click), in addition to each
         // modal's own explicit close control (finding 18).
         this.setupModalDismissal('scorecard-modal', () => this.hideScorecard());
         this.setupModalDismissal('incomplete-round-modal', () => this.dismissIncompleteRoundModal());
+        this.setupModalDismissal('skip-warning-modal', () => this.dismissSkipWarning());
 
         // Stepper buttons
         document.querySelectorAll('.btn-stepper').forEach(btn => {
@@ -162,8 +171,14 @@ const App = {
         });
 
         // Validation on input
-        document.getElementById('score-approaches').addEventListener('input', () => this.validateScoreDetails());
-        document.getElementById('score-putts').addEventListener('input', () => this.validateScoreDetails());
+        document.getElementById('score-approaches').addEventListener('input', () => {
+            this.validateScoreDetails();
+            this.updateCommitState();
+        });
+        document.getElementById('score-putts').addEventListener('input', () => {
+            this.validateScoreDetails();
+            this.updateCommitState();
+        });
     },
 
     /**
@@ -635,6 +650,65 @@ const App = {
     },
 
     /**
+     * Build the "log N more shots to match a K" message for a hole whose
+     * logged detail doesn't (yet) match its throws. Shared by
+     * updateCommitState() and the skip-warning modal so both describe the
+     * same gap the same way. Returns '' when there is no shortfall (i.e.
+     * the hole is over-logged — validateScoreDetails()'s warning already
+     * covers that case).
+     * @param {{throws: number, approaches: ?number, putts: ?number}} inputs
+     * @returns {string}
+     */
+    describeShortfall({ throws, approaches, putts }) {
+        const a = approaches ?? 0;
+        const p = putts ?? 0;
+        const shortfall = (throws - 1) - (a + p);
+        if (shortfall > 0) {
+            return `log ${shortfall} more shot${shortfall === 1 ? '' : 's'} to match a ${throws}`;
+        }
+        return '';
+    },
+
+    /**
+     * Show the skip-warning modal and resolve when the user chooses. A
+     * real modal (not window.confirm()) so it gets the same Escape/
+     * backdrop-close behavior #4 gave every other modal.
+     * @param {string} shortfall - the exact-gap message to display
+     * @returns {Promise<boolean>} resolves true for "Skip anyway", false
+     *   for "Finish logging" or a dismissal
+     */
+    confirmSkip(shortfall) {
+        return new Promise((resolve) => {
+            this._skipWarningResolve = resolve;
+            document.getElementById('skip-warning-message').textContent = shortfall;
+            document.getElementById('skip-warning-modal').classList.remove('hidden');
+            document.getElementById('skip-warning-skip-btn').focus();
+        });
+    },
+
+    /**
+     * Settle a pending confirmSkip() promise and close the modal.
+     * @param {boolean} skip - true for "Skip anyway", false for "Finish logging"
+     */
+    resolveSkipWarning(skip) {
+        document.getElementById('skip-warning-modal').classList.add('hidden');
+        if (this._skipWarningResolve) {
+            this._skipWarningResolve(skip);
+            this._skipWarningResolve = null;
+        }
+    },
+
+    /**
+     * Dismiss the skip-warning modal via Escape/backdrop — the safe
+     * default is "Finish logging" (don't skip), since interrupting a
+     * user's Escape-to-cancel instinct with a silent skip would be worse
+     * than just staying put.
+     */
+    dismissSkipWarning() {
+        this.resolveSkipWarning(false);
+    },
+
+    /**
      * Handle continue round from modal
      */
     handleContinueRound() {
@@ -1013,8 +1087,41 @@ const App = {
             document.getElementById('score-putts').value = '';
         }
 
+        this.renderRoundScoreBar();
         this.updateScoreRelative();
         this.validateScoreDetails();
+        this.updateCommitState();
+    },
+
+    /**
+     * Render the round-score bar — a pure function of the persisted
+     * round.scores, filtered by Statistics.isHoleCounted. Tapping the
+     * stepper mutates a DOM input and nothing else, so this cannot move
+     * until a save actually happens (AC #4); it only changes when
+     * renderScoringScreen() runs, which is after every navigation and
+     * after handleSaveHole().
+     *
+     * A hole that was played (has a saved score) but didn't commit is
+     * surfaced separately as "unlogged" — without this, a played-but-
+     * excluded hole is visually identical to one never played at all
+     * (AC #2). A hole with no saved score at all (never played) is
+     * neither counted nor unlogged.
+     */
+    renderRoundScoreBar() {
+        const round = this.state.currentRound;
+        const countedScores = round.scores.filter(s => Statistics.isHoleCounted(s));
+        const unloggedCount = round.scores.length - countedScores.length;
+        const totals = Statistics.calculateRunningTotal(countedScores, round.holes);
+
+        const relativeEl = document.getElementById('round-score-relative');
+        relativeEl.textContent = Utils.getRelativeScore(totals.totalScore, totals.totalPar);
+        relativeEl.className = `round-score-relative ${Utils.getTotalScoreClass(totals.totalScore, totals.totalPar)}`;
+
+        document.getElementById('round-score-progress').textContent =
+            `${countedScores.length} of ${round.holeCount} holes counted`;
+
+        document.getElementById('round-score-unlogged').textContent =
+            unloggedCount > 0 ? ` · ${unloggedCount} unlogged` : '';
     },
 
     /**
@@ -1190,9 +1297,45 @@ const App = {
     },
 
     /**
-     * Navigate to previous or next hole
+     * Live commit-state line: describes whether the hole in hand would
+     * count toward the round-score bar if saved right now, and by how
+     * much it's short if not. Reads the live inputs (via the same
+     * readScoreInputs()/isHoleCounted the bar and skip-warning use), unlike
+     * the bar itself, because its whole job is to guide the user while
+     * still typing.
      */
-    navigateHole(direction) {
+    updateCommitState() {
+        const el = document.getElementById('commit-state');
+        if (!el) return;
+
+        const { throws, approaches, putts } = this.readScoreInputs();
+        if (!throws) {
+            el.textContent = '';
+            return;
+        }
+
+        const a = approaches ?? 0;
+        const p = putts ?? 0;
+
+        if (Statistics.isHoleCounted({ throws, approaches, putts })) {
+            const parts = [];
+            if (a > 0) parts.push(`${a} approach${a === 1 ? '' : 'es'}`);
+            if (p > 0) parts.push(`${p} putt${p === 1 ? '' : 's'}`);
+            parts.push('1 drive');
+            el.textContent = `${parts.join(' + ')} = ${throws}`;
+        } else {
+            el.textContent = this.describeShortfall({ throws, approaches, putts });
+        }
+    },
+
+    /**
+     * Navigate to previous or next hole. Async: a forward move on an
+     * uncommitted hole awaits the skip-warning modal before saving.
+     * Backward moves are never gated — going back is the user electing to
+     * revisit, which is the same action the warning would exist to
+     * encourage (matty-v/disc-golf-tracker#3).
+     */
+    async navigateHole(direction) {
         // Validate before navigating forward (allow going back without validation)
         if (direction > 0) {
             const validation = this.validateScoreEntry();
@@ -1201,6 +1344,15 @@ const App = {
                 return;
             }
             this.clearValidationErrors();
+
+            const inputs = this.readScoreInputs();
+            if (!Statistics.isHoleCounted(inputs)) {
+                const skipAnyway = await this.confirmSkip(this.describeShortfall(inputs));
+                if (!skipAnyway) {
+                    return;
+                }
+            }
+
             this.saveCurrentHoleScore();
         } else {
             // Going back never validates, but it must also never silently save
@@ -1221,6 +1373,26 @@ const App = {
     },
 
     /**
+     * Read the three score inputs from the DOM with a single normalization.
+     * Both persistence (saveCurrentHoleScore) and the live preview
+     * (commit-state line, skip warning) call this, so "counted" and
+     * "saved" cannot silently drift apart the way the stored-vs-synced
+     * blank convention did in #4 finding 4.
+     * @returns {{throws: number, approaches: number|null, putts: number|null}}
+     */
+    readScoreInputs() {
+        const throwsValue = document.getElementById('score-throws').value;
+        const approachesValue = document.getElementById('score-approaches').value;
+        const puttsValue = document.getElementById('score-putts').value;
+
+        return {
+            throws: parseInt(throwsValue, 10) || 0,
+            approaches: approachesValue ? parseInt(approachesValue, 10) : null,
+            putts: puttsValue ? parseInt(puttsValue, 10) : null
+        };
+    },
+
+    /**
      * Save current hole score to round state
      */
     saveCurrentHoleScore() {
@@ -1228,10 +1400,7 @@ const App = {
         const holeIndex = this.state.currentHoleIndex;
         const hole = round.holes[holeIndex];
 
-        // Get values
-        const throws = parseInt(document.getElementById('score-throws').value, 10) || 0;
-        const approaches = document.getElementById('score-approaches').value;
-        const putts = document.getElementById('score-putts').value;
+        const { throws, approaches, putts } = this.readScoreInputs();
 
         // Update hole info if new course
         if (round.isNewCourse) {
@@ -1248,8 +1417,8 @@ const App = {
             hole_id: hole.hole_id,
             hole_number: holeIndex + 1,
             throws: throws,
-            approaches: approaches ? parseInt(approaches, 10) : null,
-            putts: putts ? parseInt(putts, 10) : null,
+            approaches: approaches,
+            putts: putts,
             created_at: Utils.formatDateForStorage()
         };
 
@@ -1264,7 +1433,9 @@ const App = {
     },
 
     /**
-     * Handle save hole button click
+     * Handle save hole button click. Runs through the same forward path
+     * as navigateHole(1) — Next Hole and the last hole's Finish Round are
+     * both gated on the skip warning (matty-v/disc-golf-tracker#3).
      */
     async handleSaveHole() {
         // Validate score entry before saving
@@ -1276,6 +1447,14 @@ const App = {
 
         // Clear any previous validation errors
         this.clearValidationErrors();
+
+        const inputs = this.readScoreInputs();
+        if (!Statistics.isHoleCounted(inputs)) {
+            const skipAnyway = await this.confirmSkip(this.describeShortfall(inputs));
+            if (!skipAnyway) {
+                return;
+            }
+        }
 
         this.saveCurrentHoleScore();
 

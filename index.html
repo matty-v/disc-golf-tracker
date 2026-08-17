@@ -166,6 +166,18 @@
             <!-- Hole Scoring Screen -->
             <div id="screen-scoring" class="screen">
                 <div class="screen-content scoring-screen">
+                    <!-- Round Score Bar -->
+                    <section class="round-score-bar" aria-label="Round score">
+                        <h3 class="round-score-label">Round</h3>
+                        <div class="round-score-body">
+                            <div id="round-score-relative" class="round-score-relative" aria-live="polite" aria-atomic="true">E</div>
+                            <div class="round-score-details">
+                                <span id="round-score-progress" class="round-score-progress">0 of 0 holes counted</span><span id="round-score-unlogged" class="round-score-unlogged"></span>
+                                <button type="button" id="round-score-scorecard-btn" class="btn btn-outline" aria-label="View scorecard">Scorecard</button>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- Hole Navigation -->
                     <nav class="hole-nav" role="navigation" aria-label="Hole navigation">
                         <button id="prev-hole-btn" class="btn-icon" aria-label="Go to previous hole" disabled>
@@ -196,6 +208,71 @@
                             </svg>
                         </button>
                     </nav>
+
+                    <!-- Score Entry Section -->
+                    <section class="score-entry" aria-label="Score entry">
+                        <h3>Your Score</h3>
+                        <div class="score-input-container">
+                            <div class="form-group score-group">
+                                <label for="score-throws">Throws</label>
+                                <div class="number-input-group large" role="group" aria-label="Throws stepper">
+                                    <button type="button" class="btn-stepper large" data-action="decrement" data-target="score-throws" aria-label="Decrease throws">-</button>
+                                    <input type="number" id="score-throws" name="score-throws"
+                                           value="3" min="1" max="20" aria-label="Number of throws" aria-describedby="score-relative">
+                                    <button type="button" class="btn-stepper large" data-action="increment" data-target="score-throws" aria-label="Increase throws">+</button>
+                                </div>
+                                <div id="score-relative" class="score-relative" aria-live="polite" aria-atomic="true">E</div>
+                            </div>
+                        </div>
+
+                        <div class="detail-scores">
+                            <div class="form-group">
+                                <label for="score-approaches">Approaches</label>
+                                <div class="number-input-group" role="group" aria-label="Approaches stepper">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-approaches" aria-label="Decrease approaches">-</button>
+                                    <input type="number" id="score-approaches" name="score-approaches"
+                                           value="" min="0" max="19" placeholder="0" aria-label="Number of approach shots">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-approaches" aria-label="Increase approaches">+</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="score-putts">Putts</label>
+                                <div class="number-input-group" role="group" aria-label="Putts stepper">
+                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-putts" aria-label="Decrease putts">-</button>
+                                    <input type="number" id="score-putts" name="score-putts"
+                                           value="" min="0" max="19" placeholder="0" aria-label="Number of putts">
+                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-putts" aria-label="Increase putts">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="validation-warning" class="validation-warning hidden" role="alert" aria-live="polite">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                            </svg>
+                            <span id="validation-message"></span>
+                        </div>
+                        <div id="commit-state" class="commit-state" aria-live="polite"></div>
+                    </section>
+
+                    <!-- Statistics Section (for existing courses with history) -->
+                    <section id="stats-section" class="stats-section hidden" aria-label="Your hole statistics">
+                        <h3>Your Averages</h3>
+                        <div class="stats-grid" role="group" aria-label="Average statistics">
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-score-label">Score</span>
+                                <span id="avg-score" class="stat-value" aria-labelledby="avg-score-label">--</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-approaches-label">Approaches</span>
+                                <span id="avg-approaches" class="stat-value" aria-labelledby="avg-approaches-label">--</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label" id="avg-putts-label">Putts</span>
+                                <span id="avg-putts" class="stat-value" aria-labelledby="avg-putts-label">--</span>
+                            </div>
+                        </div>
+                    </section>
 
                     <!-- Hole Info (for existing courses) -->
                     <div id="hole-info" class="hole-info hidden">
@@ -236,25 +313,6 @@
                         </button>
                     </div>
 
-                    <!-- Statistics Section (for existing courses with history) -->
-                    <section id="stats-section" class="stats-section hidden" aria-label="Your hole statistics">
-                        <h3>Your Averages</h3>
-                        <div class="stats-grid" role="group" aria-label="Average statistics">
-                            <div class="stat-item">
-                                <span class="stat-label" id="avg-score-label">Score</span>
-                                <span id="avg-score" class="stat-value" aria-labelledby="avg-score-label">--</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label" id="avg-approaches-label">Approaches</span>
-                                <span id="avg-approaches" class="stat-value" aria-labelledby="avg-approaches-label">--</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label" id="avg-putts-label">Putts</span>
-                                <span id="avg-putts" class="stat-value" aria-labelledby="avg-putts-label">--</span>
-                            </div>
-                        </div>
-                    </section>
-
                     <!-- Course Setup Section (for new courses) -->
                     <section id="hole-setup" class="hole-setup hidden" aria-label="Hole setup">
                         <h3>Hole Details</h3>
@@ -279,51 +337,6 @@
                             <input type="text" id="setup-description" name="setup-description"
                                    placeholder="e.g., Dogleg left around trees" maxlength="200"
                                    aria-label="Hole description or notes">
-                        </div>
-                    </section>
-
-                    <!-- Score Entry Section -->
-                    <section class="score-entry" aria-label="Score entry">
-                        <h3>Your Score</h3>
-                        <div class="score-input-container">
-                            <div class="form-group score-group">
-                                <label for="score-throws">Throws</label>
-                                <div class="number-input-group large" role="group" aria-label="Throws stepper">
-                                    <button type="button" class="btn-stepper large" data-action="decrement" data-target="score-throws" aria-label="Decrease throws">-</button>
-                                    <input type="number" id="score-throws" name="score-throws"
-                                           value="3" min="1" max="20" aria-label="Number of throws" aria-describedby="score-relative">
-                                    <button type="button" class="btn-stepper large" data-action="increment" data-target="score-throws" aria-label="Increase throws">+</button>
-                                </div>
-                                <div id="score-relative" class="score-relative" aria-live="polite" aria-atomic="true">E</div>
-                            </div>
-                        </div>
-
-                        <div class="detail-scores">
-                            <div class="form-group">
-                                <label for="score-approaches">Approaches <span class="optional">optional</span></label>
-                                <div class="number-input-group" role="group" aria-label="Approaches stepper">
-                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-approaches" aria-label="Decrease approaches">-</button>
-                                    <input type="number" id="score-approaches" name="score-approaches"
-                                           value="" min="0" max="19" placeholder="0" aria-label="Number of approach shots">
-                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-approaches" aria-label="Increase approaches">+</button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="score-putts">Putts <span class="optional">optional</span></label>
-                                <div class="number-input-group" role="group" aria-label="Putts stepper">
-                                    <button type="button" class="btn-stepper" data-action="decrement" data-target="score-putts" aria-label="Decrease putts">-</button>
-                                    <input type="number" id="score-putts" name="score-putts"
-                                           value="" min="0" max="19" placeholder="0" aria-label="Number of putts">
-                                    <button type="button" class="btn-stepper" data-action="increment" data-target="score-putts" aria-label="Increase putts">+</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="validation-warning" class="validation-warning hidden" role="alert" aria-live="polite">
-                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-                            </svg>
-                            <span id="validation-message"></span>
                         </div>
                     </section>
                 </div>
@@ -503,6 +516,18 @@
                     <div class="modal-actions">
                         <button id="continue-round-btn" class="btn btn-primary" aria-label="Continue the incomplete round">Continue Round</button>
                         <button id="abandon-round-btn" class="btn btn-outline btn-danger" aria-label="Abandon the incomplete round and start a new one">Abandon & Start New</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skip-warning Modal -->
+            <div id="skip-warning-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="skip-warning-title" aria-describedby="skip-warning-message">
+                <div class="modal-content modal-small">
+                    <h2 id="skip-warning-title">Hole not fully logged</h2>
+                    <p id="skip-warning-message"></p>
+                    <div class="modal-actions">
+                        <button id="skip-warning-finish-btn" class="btn btn-primary" aria-label="Stay and finish logging this hole">Finish logging</button>
+                        <button id="skip-warning-skip-btn" class="btn btn-outline" aria-label="Skip this hole and continue">Skip anyway</button>
                     </div>
                 </div>
             </div>

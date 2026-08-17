@@ -140,6 +140,35 @@
         }
     });
 
+    test('finishRound saves the full total including an uncommitted hole (AC #8, matty-v/disc-golf-tracker#3)', async function() {
+        setupDOM();
+        resetStorage();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                // hole 1: committed (par 3, throws 4, 2 approaches + 1 putt = 3 = 4-1)
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1, created_at: new Date().toISOString() },
+                // hole 2: NOT committed (throws entered, no approach/putt detail) — skipped via
+                // "Skip anyway", per the architecture this must still count toward the saved total.
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 5, approaches: null, putts: null, created_at: new Date().toISOString() }
+            ];
+
+            await App.finishRound();
+
+            // The commit rule (isHoleCounted) must never reach finishRound()'s
+            // totals — the round's saved total is every hole with throws,
+            // regardless of whether it was "committed" under the live bar's rule.
+            assertEqual(App.state.currentRound.total_score, 9, 'the saved total must include the uncommitted hole\'s throws (4 + 5)');
+            assertEqual(App.state.currentRound.total_par, 6, 'the saved total par must include both holes');
+
+            const rounds = await Storage.getAll('rounds');
+            const savedRound = rounds.find(r => r.round_id === 'round-1');
+            assertEqual(savedRound.total_score, 9, 'the durably-persisted total must also include the uncommitted hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
     test('a completed-but-unsynced round survives a simulated reload and is offered for resume', async function() {
         setupDOM();
         resetStorage();
@@ -309,6 +338,62 @@
             assertNotNull(Storage.getCurrentRound(), 'the round must remain recoverable in storage too, so checkIncompleteRound() can offer it again');
         } finally {
             App.state.isOnline = originalIsOnline;
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // readScoreInputs — single normalizer shared by persistence and the
+    // live preview (matty-v/disc-golf-tracker#3, guarding against a repeat
+    // of #4 finding 4's stored-vs-live divergence)
+    // =========================================
+
+    test('readScoreInputs maps blank approaches/putts to null, blank throws to 0', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.throws, 0, 'blank throws normalizes to 0, matching the existing required-field convention');
+            assertNull(result.approaches, 'blank approaches must normalize to null');
+            assertNull(result.putts, 'blank putts must normalize to null');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('readScoreInputs parses real entered values', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.throws, 4);
+            assertEqual(result.approaches, 2);
+            assertEqual(result.putts, 1);
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('readScoreInputs preserves an explicit 0 for approaches/putts (not the same as blank)', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '3';
+            el('score-approaches').value = '0';
+            el('score-putts').value = '0';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.approaches, 0, 'an explicit 0 must stay 0, not become null');
+            assertEqual(result.putts, 0);
+        } finally {
             teardownDOM();
         }
     });
@@ -511,6 +596,391 @@
             const saved = App.state.currentRound.scores.find(s => s.hole_number === 2);
             assertNotNull(saved, 'a real entered score must still be saved on backward navigation');
             assertEqual(saved.throws, 5);
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // Skip-warning gate on forward departures (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    function mockConfirmSkip(resolveWith) {
+        const original = App.confirmSkip;
+        const calls = [];
+        App.confirmSkip = (shortfall) => {
+            calls.push(shortfall);
+            return Promise.resolve(resolveWith);
+        };
+        return { calls, restore: () => { App.confirmSkip = original; } };
+    }
+
+    test('navigateHole(1) never prompts when the hole is already counted', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.navigateHole(1);
+                assertEqual(mock.calls.length, 0, 'a counted hole must never trigger the skip warning');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 1, 'navigation must still proceed for a counted hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(1) on an uncommitted hole prompts, and "Skip anyway" still saves + navigates', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.navigateHole(1);
+                assertEqual(mock.calls.length, 1, 'an uncommitted hole on a forward move must trigger exactly one skip warning');
+                assertEqual(mock.calls[0], 'log 3 more shots to match a 4', 'the warning must name the exact gap');
+            } finally {
+                mock.restore();
+            }
+
+            const saved = App.state.currentRound.scores.find(s => s.hole_number === 1);
+            assertNotNull(saved, '"Skip anyway" must still save the throws entered so far');
+            assertEqual(saved.throws, 4);
+            assertEqual(App.state.currentHoleIndex, 1, '"Skip anyway" must still navigate forward');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(1) on an uncommitted hole: "Finish logging" stays put and does not save', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.navigateHole(1);
+            } finally {
+                mock.restore();
+            }
+
+            const saved = App.state.currentRound.scores.find(s => s.hole_number === 1);
+            assertTrue(!saved, '"Finish logging" must not save the uncommitted hole');
+            assertEqual(App.state.currentHoleIndex, 0, '"Finish logging" must not navigate away');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(-1) never prompts even when the hole is uncommitted — backward moves are never gated', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 1;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.navigateHole(-1);
+                assertEqual(mock.calls.length, 0, 'backward navigation must never trigger the skip warning (Trigger policy)');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 0, 'backward navigation must still proceed');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole on a non-final uncommitted hole: "Skip anyway" advances to the next hole', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.handleSaveHole();
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 1, 'Skip anyway must still advance to the next hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole on the final uncommitted hole: "Skip anyway" still finishes the round', async function() {
+        setupDOM();
+        resetStorage();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.handleSaveHole();
+                assertEqual(mock.calls.length, 1, 'the last hole must also be gated — Finish Round runs through the same forward path');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentScreen, 'summary', 'Skip anyway on the final hole must still finish the round');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole "Finish logging" does not finish the round or advance', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentHoleIndex = 0;
+            App.state.currentScreen = 'scoring';
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.handleSaveHole();
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentScreen, 'scoring', 'Finish logging must not finish the round');
+            assertEqual(App.state.currentHoleIndex, 0, 'Finish logging must not advance');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // Round-score bar (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    test('renderRoundScoreBar shows the running total from only the counted holes', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(3);
+            App.state.currentRound.scores = [
+                // par 3 holes (makeHoles default). Counted: 4 throws, 2+1=3=4-1.
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 },
+                // Not counted: under-logged (1+0=1, needs 2).
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 3, approaches: 1, putts: 0 },
+                // Counted: ace.
+                { score_id: 's3', round_id: 'round-1', hole_id: 'hole-3', hole_number: 3, throws: 1, approaches: 0, putts: 0 }
+            ];
+
+            App.renderRoundScoreBar();
+
+            // Counted holes: hole 1 (throws 4, par 3) + hole 3 (throws 1, par 3)
+            // => totalScore 5, totalPar 6, relativeToPar -1.
+            assertEqual(el('round-score-relative').textContent, '-1', 'the bar must total only the counted holes');
+            assertEqual(el('round-score-progress').textContent, '2 of 3 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, ' · 1 unlogged', 'hole 2 was played (has throws) but not committed — it must be surfaced as unlogged, not silently absent (AC #2)');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar shows no unlogged suffix when every played hole is committed', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-progress').textContent, '1 of 2 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, '', 'no unlogged holes must render nothing, not "0 unlogged"');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar distinguishes an unplayed hole from an unlogged one — only played-but-uncommitted holes count as unlogged', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(5);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 },
+                // hole 2: played, uncommitted.
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 3, approaches: null, putts: null }
+                // holes 3-5: never played at all — must NOT count as unlogged.
+            ];
+
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-progress').textContent, '1 of 5 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, ' · 1 unlogged', 'only the played-but-uncommitted hole counts as unlogged, not the three never-played holes');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar does not move when the live inputs change without a save (AC #4)', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.renderRoundScoreBar();
+            const before = el('round-score-relative').textContent;
+
+            // Simulate tapping the stepper repeatedly — mutates the DOM
+            // input only, never round.scores.
+            el('score-throws').value = '20';
+            el('score-approaches').value = '19';
+            el('score-putts').value = '19';
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-relative').textContent, before, 'the bar is a pure function of round.scores — live input changes must never move it');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderScoringScreen calls renderRoundScoreBar so the bar updates after every navigation/save', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.state.currentHoleIndex = 0;
+            App.state.holeStats = {};
+
+            App.renderScoringScreen();
+
+            assertEqual(el('round-score-relative').textContent, '+1', 'renderScoringScreen must keep the bar in sync (throws 4, par 3)');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
+    // Commit-state live line (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    test('updateCommitState shows the committed breakdown when the hole is counted', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '2 approaches + 1 putt + 1 drive = 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState shows the shortfall when the hole is not yet counted', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, 'log 3 more shots to match a 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState handles the ace case (throws:1, 0 approaches, 0 putts) as committed', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '1';
+            el('score-approaches').value = '0';
+            el('score-putts').value = '0';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '1 drive = 1');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState singularizes "1 more shot"', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '1';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, 'log 1 more shot to match a 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderScoringScreen initializes the commit-state line for the loaded hole', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.state.currentHoleIndex = 0;
+            App.state.holeStats = {};
+
+            App.renderScoringScreen();
+
+            assertEqual(el('commit-state').textContent, '2 approaches + 1 putt + 1 drive = 4', 'renderScoringScreen must init the commit-state line for the hole being shown');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState clears when throws is blank', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '');
         } finally {
             teardownDOM();
         }
