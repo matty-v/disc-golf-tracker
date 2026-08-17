@@ -640,4 +640,101 @@
             teardownDOM();
         }
     });
+
+    // =========================================
+    // Commit-state live line (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    test('updateCommitState shows the committed breakdown when the hole is counted', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '2 approaches + 1 putt + 1 drive = 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState shows the shortfall when the hole is not yet counted', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, 'log 3 more shots to match a 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState handles the ace case (throws:1, 0 approaches, 0 putts) as committed', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '1';
+            el('score-approaches').value = '0';
+            el('score-putts').value = '0';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '1 drive = 1');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState singularizes "1 more shot"', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '1';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, 'log 1 more shot to match a 4');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderScoringScreen initializes the commit-state line for the loaded hole', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.state.currentHoleIndex = 0;
+            App.state.holeStats = {};
+
+            App.renderScoringScreen();
+
+            assertEqual(el('commit-state').textContent, '2 approaches + 1 putt + 1 drive = 4', 'renderScoringScreen must init the commit-state line for the hole being shown');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('updateCommitState clears when throws is blank', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            App.updateCommitState();
+
+            assertEqual(el('commit-state').textContent, '');
+        } finally {
+            teardownDOM();
+        }
+    });
 })();

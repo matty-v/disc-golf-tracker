@@ -117,7 +117,10 @@ const App = {
         document.getElementById('save-hole-btn').addEventListener('click', () => this.handleSaveHole());
 
         // Score input change handlers
-        document.getElementById('score-throws').addEventListener('input', () => this.updateScoreRelative());
+        document.getElementById('score-throws').addEventListener('input', () => {
+            this.updateScoreRelative();
+            this.updateCommitState();
+        });
         document.getElementById('setup-par').addEventListener('input', () => this.updateScoreRelative());
 
         // Summary screen
@@ -163,8 +166,14 @@ const App = {
         });
 
         // Validation on input
-        document.getElementById('score-approaches').addEventListener('input', () => this.validateScoreDetails());
-        document.getElementById('score-putts').addEventListener('input', () => this.validateScoreDetails());
+        document.getElementById('score-approaches').addEventListener('input', () => {
+            this.validateScoreDetails();
+            this.updateCommitState();
+        });
+        document.getElementById('score-putts').addEventListener('input', () => {
+            this.validateScoreDetails();
+            this.updateCommitState();
+        });
     },
 
     /**
@@ -1017,6 +1026,7 @@ const App = {
         this.renderRoundScoreBar();
         this.updateScoreRelative();
         this.validateScoreDetails();
+        this.updateCommitState();
     },
 
     /**
@@ -1209,6 +1219,45 @@ const App = {
             message.textContent = 'Approaches + Putts exceed throws (need at least 1 drive)';
         } else {
             Utils.toggleElement(warning, false);
+        }
+    },
+
+    /**
+     * Live commit-state line: describes whether the hole in hand would
+     * count toward the round-score bar if saved right now, and by how
+     * much it's short if not. Reads the live inputs (via the same
+     * readScoreInputs()/isHoleCounted the bar and skip-warning use), unlike
+     * the bar itself, because its whole job is to guide the user while
+     * still typing.
+     */
+    updateCommitState() {
+        const el = document.getElementById('commit-state');
+        if (!el) return;
+
+        const { throws, approaches, putts } = this.readScoreInputs();
+        if (!throws) {
+            el.textContent = '';
+            return;
+        }
+
+        const a = approaches ?? 0;
+        const p = putts ?? 0;
+
+        if (Statistics.isHoleCounted({ throws, approaches, putts })) {
+            const parts = [];
+            if (a > 0) parts.push(`${a} approach${a === 1 ? '' : 'es'}`);
+            if (p > 0) parts.push(`${p} putt${p === 1 ? '' : 's'}`);
+            parts.push('1 drive');
+            el.textContent = `${parts.join(' + ')} = ${throws}`;
+        } else {
+            const shortfall = (throws - 1) - (a + p);
+            if (shortfall > 0) {
+                el.textContent = `log ${shortfall} more shot${shortfall === 1 ? '' : 's'} to match a ${throws}`;
+            } else {
+                // Over-logged — validateScoreDetails()'s warning already
+                // covers this case; nothing additional to say here.
+                el.textContent = '';
+            }
         }
     },
 
