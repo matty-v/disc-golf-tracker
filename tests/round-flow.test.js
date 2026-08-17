@@ -140,6 +140,35 @@
         }
     });
 
+    test('finishRound saves the full total including an uncommitted hole (AC #8, matty-v/disc-golf-tracker#3)', async function() {
+        setupDOM();
+        resetStorage();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                // hole 1: committed (par 3, throws 4, 2 approaches + 1 putt = 3 = 4-1)
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1, created_at: new Date().toISOString() },
+                // hole 2: NOT committed (throws entered, no approach/putt detail) — skipped via
+                // "Skip anyway", per the architecture this must still count toward the saved total.
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 5, approaches: null, putts: null, created_at: new Date().toISOString() }
+            ];
+
+            await App.finishRound();
+
+            // The commit rule (isHoleCounted) must never reach finishRound()'s
+            // totals — the round's saved total is every hole with throws,
+            // regardless of whether it was "committed" under the live bar's rule.
+            assertEqual(App.state.currentRound.total_score, 9, 'the saved total must include the uncommitted hole\'s throws (4 + 5)');
+            assertEqual(App.state.currentRound.total_par, 6, 'the saved total par must include both holes');
+
+            const rounds = await Storage.getAll('rounds');
+            const savedRound = rounds.find(r => r.round_id === 'round-1');
+            assertEqual(savedRound.total_score, 9, 'the durably-persisted total must also include the uncommitted hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
     test('a completed-but-unsynced round survives a simulated reload and is offered for resume', async function() {
         setupDOM();
         resetStorage();
