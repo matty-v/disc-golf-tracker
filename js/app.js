@@ -122,6 +122,7 @@ const App = {
 
         // Summary screen
         document.getElementById('view-scorecard-btn').addEventListener('click', () => this.showScorecard());
+        document.getElementById('round-score-scorecard-btn').addEventListener('click', () => this.showScorecard());
         document.getElementById('finish-round-btn').addEventListener('click', () => this.handleFinishRound());
         document.getElementById('close-scorecard-btn').addEventListener('click', () => this.hideScorecard());
 
@@ -1013,8 +1014,30 @@ const App = {
             document.getElementById('score-putts').value = '';
         }
 
+        this.renderRoundScoreBar();
         this.updateScoreRelative();
         this.validateScoreDetails();
+    },
+
+    /**
+     * Render the round-score bar — a pure function of the persisted
+     * round.scores, filtered by Statistics.isHoleCounted. Tapping the
+     * stepper mutates a DOM input and nothing else, so this cannot move
+     * until a save actually happens (AC #4); it only changes when
+     * renderScoringScreen() runs, which is after every navigation and
+     * after handleSaveHole().
+     */
+    renderRoundScoreBar() {
+        const round = this.state.currentRound;
+        const countedScores = round.scores.filter(s => Statistics.isHoleCounted(s));
+        const totals = Statistics.calculateRunningTotal(countedScores, round.holes);
+
+        const relativeEl = document.getElementById('round-score-relative');
+        relativeEl.textContent = Utils.getRelativeScore(totals.totalScore, totals.totalPar);
+        relativeEl.className = `round-score-relative ${Utils.getTotalScoreClass(totals.totalScore, totals.totalPar)}`;
+
+        document.getElementById('round-score-progress').textContent =
+            `${countedScores.length} of ${round.holeCount} holes counted`;
     },
 
     /**

@@ -571,4 +571,73 @@
             teardownDOM();
         }
     });
+
+    // =========================================
+    // Round-score bar (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    test('renderRoundScoreBar shows the running total from only the counted holes', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(3);
+            App.state.currentRound.scores = [
+                // par 3 holes (makeHoles default). Counted: 4 throws, 2+1=3=4-1.
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 },
+                // Not counted: under-logged (1+0=1, needs 2).
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 3, approaches: 1, putts: 0 },
+                // Counted: ace.
+                { score_id: 's3', round_id: 'round-1', hole_id: 'hole-3', hole_number: 3, throws: 1, approaches: 0, putts: 0 }
+            ];
+
+            App.renderRoundScoreBar();
+
+            // Counted holes: hole 1 (throws 4, par 3) + hole 3 (throws 1, par 3)
+            // => totalScore 5, totalPar 6, relativeToPar -1.
+            assertEqual(el('round-score-relative').textContent, '-1', 'the bar must total only the counted holes');
+            assertEqual(el('round-score-progress').textContent, '2 of 3 holes counted');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar does not move when the live inputs change without a save (AC #4)', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.renderRoundScoreBar();
+            const before = el('round-score-relative').textContent;
+
+            // Simulate tapping the stepper repeatedly — mutates the DOM
+            // input only, never round.scores.
+            el('score-throws').value = '20';
+            el('score-approaches').value = '19';
+            el('score-putts').value = '19';
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-relative').textContent, before, 'the bar is a pure function of round.scores — live input changes must never move it');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderScoringScreen calls renderRoundScoreBar so the bar updates after every navigation/save', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+            App.state.currentHoleIndex = 0;
+            App.state.holeStats = {};
+
+            App.renderScoringScreen();
+
+            assertEqual(el('round-score-relative').textContent, '+1', 'renderScoringScreen must keep the bar in sync (throws 4, par 3)');
+        } finally {
+            teardownDOM();
+        }
+    });
 })();
