@@ -133,10 +133,15 @@ const App = {
         document.getElementById('continue-round-btn').addEventListener('click', () => this.handleContinueRound());
         document.getElementById('abandon-round-btn').addEventListener('click', () => this.handleAbandonRound());
 
+        // Skip-warning modal (matty-v/disc-golf-tracker#3)
+        document.getElementById('skip-warning-finish-btn').addEventListener('click', () => this.resolveSkipWarning(false));
+        document.getElementById('skip-warning-skip-btn').addEventListener('click', () => this.resolveSkipWarning(true));
+
         // Dialog dismissal (Escape + backdrop click), in addition to each
         // modal's own explicit close control (finding 18).
         this.setupModalDismissal('scorecard-modal', () => this.hideScorecard());
         this.setupModalDismissal('incomplete-round-modal', () => this.dismissIncompleteRoundModal());
+        this.setupModalDismissal('skip-warning-modal', () => this.dismissSkipWarning());
 
         // Stepper buttons
         document.querySelectorAll('.btn-stepper').forEach(btn => {
@@ -642,6 +647,65 @@ const App = {
      */
     dismissIncompleteRoundModal() {
         document.getElementById('incomplete-round-modal').classList.add('hidden');
+    },
+
+    /**
+     * Build the "log N more shots to match a K" message for a hole whose
+     * logged detail doesn't (yet) match its throws. Shared by
+     * updateCommitState() and the skip-warning modal so both describe the
+     * same gap the same way. Returns '' when there is no shortfall (i.e.
+     * the hole is over-logged — validateScoreDetails()'s warning already
+     * covers that case).
+     * @param {{throws: number, approaches: ?number, putts: ?number}} inputs
+     * @returns {string}
+     */
+    describeShortfall({ throws, approaches, putts }) {
+        const a = approaches ?? 0;
+        const p = putts ?? 0;
+        const shortfall = (throws - 1) - (a + p);
+        if (shortfall > 0) {
+            return `log ${shortfall} more shot${shortfall === 1 ? '' : 's'} to match a ${throws}`;
+        }
+        return '';
+    },
+
+    /**
+     * Show the skip-warning modal and resolve when the user chooses. A
+     * real modal (not window.confirm()) so it gets the same Escape/
+     * backdrop-close behavior #4 gave every other modal.
+     * @param {string} shortfall - the exact-gap message to display
+     * @returns {Promise<boolean>} resolves true for "Skip anyway", false
+     *   for "Finish logging" or a dismissal
+     */
+    confirmSkip(shortfall) {
+        return new Promise((resolve) => {
+            this._skipWarningResolve = resolve;
+            document.getElementById('skip-warning-message').textContent = shortfall;
+            document.getElementById('skip-warning-modal').classList.remove('hidden');
+            document.getElementById('skip-warning-skip-btn').focus();
+        });
+    },
+
+    /**
+     * Settle a pending confirmSkip() promise and close the modal.
+     * @param {boolean} skip - true for "Skip anyway", false for "Finish logging"
+     */
+    resolveSkipWarning(skip) {
+        document.getElementById('skip-warning-modal').classList.add('hidden');
+        if (this._skipWarningResolve) {
+            this._skipWarningResolve(skip);
+            this._skipWarningResolve = null;
+        }
+    },
+
+    /**
+     * Dismiss the skip-warning modal via Escape/backdrop — the safe
+     * default is "Finish logging" (don't skip), since interrupting a
+     * user's Escape-to-cancel instinct with a silent skip would be worse
+     * than just staying put.
+     */
+    dismissSkipWarning() {
+        this.resolveSkipWarning(false);
     },
 
     /**
@@ -1250,21 +1314,18 @@ const App = {
             parts.push('1 drive');
             el.textContent = `${parts.join(' + ')} = ${throws}`;
         } else {
-            const shortfall = (throws - 1) - (a + p);
-            if (shortfall > 0) {
-                el.textContent = `log ${shortfall} more shot${shortfall === 1 ? '' : 's'} to match a ${throws}`;
-            } else {
-                // Over-logged — validateScoreDetails()'s warning already
-                // covers this case; nothing additional to say here.
-                el.textContent = '';
-            }
+            el.textContent = this.describeShortfall({ throws, approaches, putts });
         }
     },
 
     /**
-     * Navigate to previous or next hole
+     * Navigate to previous or next hole. Async: a forward move on an
+     * uncommitted hole awaits the skip-warning modal before saving.
+     * Backward moves are never gated — going back is the user electing to
+     * revisit, which is the same action the warning would exist to
+     * encourage (matty-v/disc-golf-tracker#3).
      */
-    navigateHole(direction) {
+    async navigateHole(direction) {
         // Validate before navigating forward (allow going back without validation)
         if (direction > 0) {
             const validation = this.validateScoreEntry();
@@ -1273,6 +1334,15 @@ const App = {
                 return;
             }
             this.clearValidationErrors();
+
+            const inputs = this.readScoreInputs();
+            if (!Statistics.isHoleCounted(inputs)) {
+                const skipAnyway = await this.confirmSkip(this.describeShortfall(inputs));
+                if (!skipAnyway) {
+                    return;
+                }
+            }
+
             this.saveCurrentHoleScore();
         } else {
             // Going back never validates, but it must also never silently save
@@ -1353,7 +1423,9 @@ const App = {
     },
 
     /**
-     * Handle save hole button click
+     * Handle save hole button click. Runs through the same forward path
+     * as navigateHole(1) — Next Hole and the last hole's Finish Round are
+     * both gated on the skip warning (matty-v/disc-golf-tracker#3).
      */
     async handleSaveHole() {
         // Validate score entry before saving
@@ -1365,6 +1437,14 @@ const App = {
 
         // Clear any previous validation errors
         this.clearValidationErrors();
+
+        const inputs = this.readScoreInputs();
+        if (!Statistics.isHoleCounted(inputs)) {
+            const skipAnyway = await this.confirmSkip(this.describeShortfall(inputs));
+            if (!skipAnyway) {
+                return;
+            }
+        }
 
         this.saveCurrentHoleScore();
 

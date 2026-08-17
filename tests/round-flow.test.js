@@ -573,6 +573,187 @@
     });
 
     // =========================================
+    // Skip-warning gate on forward departures (matty-v/disc-golf-tracker#3)
+    // =========================================
+
+    function mockConfirmSkip(resolveWith) {
+        const original = App.confirmSkip;
+        const calls = [];
+        App.confirmSkip = (shortfall) => {
+            calls.push(shortfall);
+            return Promise.resolve(resolveWith);
+        };
+        return { calls, restore: () => { App.confirmSkip = original; } };
+    }
+
+    test('navigateHole(1) never prompts when the hole is already counted', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.navigateHole(1);
+                assertEqual(mock.calls.length, 0, 'a counted hole must never trigger the skip warning');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 1, 'navigation must still proceed for a counted hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(1) on an uncommitted hole prompts, and "Skip anyway" still saves + navigates', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.navigateHole(1);
+                assertEqual(mock.calls.length, 1, 'an uncommitted hole on a forward move must trigger exactly one skip warning');
+                assertEqual(mock.calls[0], 'log 3 more shots to match a 4', 'the warning must name the exact gap');
+            } finally {
+                mock.restore();
+            }
+
+            const saved = App.state.currentRound.scores.find(s => s.hole_number === 1);
+            assertNotNull(saved, '"Skip anyway" must still save the throws entered so far');
+            assertEqual(saved.throws, 4);
+            assertEqual(App.state.currentHoleIndex, 1, '"Skip anyway" must still navigate forward');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(1) on an uncommitted hole: "Finish logging" stays put and does not save', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.navigateHole(1);
+            } finally {
+                mock.restore();
+            }
+
+            const saved = App.state.currentRound.scores.find(s => s.hole_number === 1);
+            assertTrue(!saved, '"Finish logging" must not save the uncommitted hole');
+            assertEqual(App.state.currentHoleIndex, 0, '"Finish logging" must not navigate away');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('navigateHole(-1) never prompts even when the hole is uncommitted — backward moves are never gated', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 1;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.navigateHole(-1);
+                assertEqual(mock.calls.length, 0, 'backward navigation must never trigger the skip warning (Trigger policy)');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 0, 'backward navigation must still proceed');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole on a non-final uncommitted hole: "Skip anyway" advances to the next hole', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.handleSaveHole();
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentHoleIndex, 1, 'Skip anyway must still advance to the next hole');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole on the final uncommitted hole: "Skip anyway" still finishes the round', async function() {
+        setupDOM();
+        resetStorage();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentHoleIndex = 0;
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(true);
+            try {
+                await App.handleSaveHole();
+                assertEqual(mock.calls.length, 1, 'the last hole must also be gated — Finish Round runs through the same forward path');
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentScreen, 'summary', 'Skip anyway on the final hole must still finish the round');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('handleSaveHole "Finish logging" does not finish the round or advance', async function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(1);
+            App.state.currentHoleIndex = 0;
+            App.state.currentScreen = 'scoring';
+            el('score-throws').value = '4';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const mock = mockConfirmSkip(false);
+            try {
+                await App.handleSaveHole();
+            } finally {
+                mock.restore();
+            }
+
+            assertEqual(App.state.currentScreen, 'scoring', 'Finish logging must not finish the round');
+            assertEqual(App.state.currentHoleIndex, 0, 'Finish logging must not advance');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
     // Round-score bar (matty-v/disc-golf-tracker#3)
     // =========================================
 
