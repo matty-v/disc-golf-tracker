@@ -314,6 +314,62 @@
     });
 
     // =========================================
+    // readScoreInputs — single normalizer shared by persistence and the
+    // live preview (matty-v/disc-golf-tracker#3, guarding against a repeat
+    // of #4 finding 4's stored-vs-live divergence)
+    // =========================================
+
+    test('readScoreInputs maps blank approaches/putts to null, blank throws to 0', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '';
+            el('score-approaches').value = '';
+            el('score-putts').value = '';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.throws, 0, 'blank throws normalizes to 0, matching the existing required-field convention');
+            assertNull(result.approaches, 'blank approaches must normalize to null');
+            assertNull(result.putts, 'blank putts must normalize to null');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('readScoreInputs parses real entered values', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '4';
+            el('score-approaches').value = '2';
+            el('score-putts').value = '1';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.throws, 4);
+            assertEqual(result.approaches, 2);
+            assertEqual(result.putts, 1);
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('readScoreInputs preserves an explicit 0 for approaches/putts (not the same as blank)', function() {
+        setupDOM();
+        try {
+            el('score-throws').value = '3';
+            el('score-approaches').value = '0';
+            el('score-putts').value = '0';
+
+            const result = App.readScoreInputs();
+
+            assertEqual(result.approaches, 0, 'an explicit 0 must stay 0, not become null');
+            assertEqual(result.putts, 0);
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    // =========================================
     // Blank optional fields store null, not 0 (finding 4)
     // =========================================
 

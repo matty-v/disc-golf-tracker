@@ -236,6 +236,23 @@ const Statistics = {
     },
 
     /**
+     * Whether a hole's logged detail matches its throws exactly — the drive
+     * is always excluded, so approaches + putts === throws - 1. Used to
+     * decide whether a hole counts toward the live round-score bar
+     * (matty-v/disc-golf-tracker#3); it never gates what a finished round
+     * actually saves (finishRound()/calculateRunningTotal() are unfiltered).
+     * @param {{throws: ?number, approaches: ?number, putts: ?number}} score
+     * @returns {boolean}
+     */
+    isHoleCounted(score) {
+        const throws = score.throws;
+        if (!throws) return false; // guards missing/0 throws from matching -1
+        const approaches = score.approaches ?? 0;
+        const putts = score.putts ?? 0;
+        return approaches + putts === throws - 1;
+    },
+
+    /**
      * Calculate running total for a round
      * @param {Array} scores - Scores in the round
      * @param {Array} holes - Holes for the course

@@ -1221,6 +1221,26 @@ const App = {
     },
 
     /**
+     * Read the three score inputs from the DOM with a single normalization.
+     * Both persistence (saveCurrentHoleScore) and the live preview
+     * (commit-state line, skip warning) call this, so "counted" and
+     * "saved" cannot silently drift apart the way the stored-vs-synced
+     * blank convention did in #4 finding 4.
+     * @returns {{throws: number, approaches: number|null, putts: number|null}}
+     */
+    readScoreInputs() {
+        const throwsValue = document.getElementById('score-throws').value;
+        const approachesValue = document.getElementById('score-approaches').value;
+        const puttsValue = document.getElementById('score-putts').value;
+
+        return {
+            throws: parseInt(throwsValue, 10) || 0,
+            approaches: approachesValue ? parseInt(approachesValue, 10) : null,
+            putts: puttsValue ? parseInt(puttsValue, 10) : null
+        };
+    },
+
+    /**
      * Save current hole score to round state
      */
     saveCurrentHoleScore() {
@@ -1228,10 +1248,7 @@ const App = {
         const holeIndex = this.state.currentHoleIndex;
         const hole = round.holes[holeIndex];
 
-        // Get values
-        const throws = parseInt(document.getElementById('score-throws').value, 10) || 0;
-        const approaches = document.getElementById('score-approaches').value;
-        const putts = document.getElementById('score-putts').value;
+        const { throws, approaches, putts } = this.readScoreInputs();
 
         // Update hole info if new course
         if (round.isNewCourse) {
@@ -1248,8 +1265,8 @@ const App = {
             hole_id: hole.hole_id,
             hole_number: holeIndex + 1,
             throws: throws,
-            approaches: approaches ? parseInt(approaches, 10) : null,
-            putts: putts ? parseInt(putts, 10) : null,
+            approaches: approaches,
+            putts: putts,
             created_at: Utils.formatDateForStorage()
         };
 
