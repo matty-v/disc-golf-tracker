@@ -166,6 +166,18 @@
             <!-- Hole Scoring Screen -->
             <div id="screen-scoring" class="screen">
                 <div class="screen-content scoring-screen">
+                    <!-- Round Score Bar -->
+                    <section class="round-score-bar" aria-label="Round score">
+                        <h3 class="round-score-label">Round</h3>
+                        <div class="round-score-body">
+                            <div id="round-score-relative" class="round-score-relative" aria-live="polite" aria-atomic="true">E</div>
+                            <div class="round-score-details">
+                                <span id="round-score-progress" class="round-score-progress">0 of 0 holes counted</span><span id="round-score-unlogged" class="round-score-unlogged"></span>
+                                <button type="button" id="round-score-scorecard-btn" class="btn btn-outline" aria-label="View scorecard">Scorecard</button>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- Hole Navigation -->
                     <nav class="hole-nav" role="navigation" aria-label="Hole navigation">
                         <button id="prev-hole-btn" class="btn-icon" aria-label="Go to previous hole" disabled>
@@ -196,18 +208,6 @@
                             </svg>
                         </button>
                     </nav>
-
-                    <!-- Round Score Bar -->
-                    <section class="round-score-bar" aria-label="Round score">
-                        <h3 class="round-score-label">Round</h3>
-                        <div class="round-score-body">
-                            <div id="round-score-relative" class="round-score-relative" aria-live="polite" aria-atomic="true">E</div>
-                            <div class="round-score-details">
-                                <span id="round-score-progress" class="round-score-progress">0 of 0 holes counted</span>
-                                <button type="button" id="round-score-scorecard-btn" class="btn btn-outline" aria-label="View scorecard">Scorecard</button>
-                            </div>
-                        </div>
-                    </section>
 
                     <!-- Score Entry Section -->
                     <section class="score-entry" aria-label="Score entry">

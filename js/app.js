@@ -1100,10 +1100,17 @@ const App = {
      * until a save actually happens (AC #4); it only changes when
      * renderScoringScreen() runs, which is after every navigation and
      * after handleSaveHole().
+     *
+     * A hole that was played (has a saved score) but didn't commit is
+     * surfaced separately as "unlogged" — without this, a played-but-
+     * excluded hole is visually identical to one never played at all
+     * (AC #2). A hole with no saved score at all (never played) is
+     * neither counted nor unlogged.
      */
     renderRoundScoreBar() {
         const round = this.state.currentRound;
         const countedScores = round.scores.filter(s => Statistics.isHoleCounted(s));
+        const unloggedCount = round.scores.length - countedScores.length;
         const totals = Statistics.calculateRunningTotal(countedScores, round.holes);
 
         const relativeEl = document.getElementById('round-score-relative');
@@ -1112,6 +1119,9 @@ const App = {
 
         document.getElementById('round-score-progress').textContent =
             `${countedScores.length} of ${round.holeCount} holes counted`;
+
+        document.getElementById('round-score-unlogged').textContent =
+            unloggedCount > 0 ? ` · ${unloggedCount} unlogged` : '';
     },
 
     /**

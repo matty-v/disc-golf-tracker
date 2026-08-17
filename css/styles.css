@@ -1155,6 +1155,12 @@ input[type="number"]::-webkit-inner-spin-button {
     color: var(--color-gray-600);
 }
 
+.round-score-unlogged {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-bogey);
+}
+
 .round-score-details .btn {
     align-self: flex-start;
     padding: var(--spacing-xs) var(--spacing-md);

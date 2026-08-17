@@ -805,6 +805,44 @@
             // => totalScore 5, totalPar 6, relativeToPar -1.
             assertEqual(el('round-score-relative').textContent, '-1', 'the bar must total only the counted holes');
             assertEqual(el('round-score-progress').textContent, '2 of 3 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, ' · 1 unlogged', 'hole 2 was played (has throws) but not committed — it must be surfaced as unlogged, not silently absent (AC #2)');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar shows no unlogged suffix when every played hole is committed', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(2);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 }
+            ];
+
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-progress').textContent, '1 of 2 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, '', 'no unlogged holes must render nothing, not "0 unlogged"');
+        } finally {
+            teardownDOM();
+        }
+    });
+
+    test('renderRoundScoreBar distinguishes an unplayed hole from an unlogged one — only played-but-uncommitted holes count as unlogged', function() {
+        setupDOM();
+        try {
+            App.state.currentRound = makeRound(5);
+            App.state.currentRound.scores = [
+                { score_id: 's1', round_id: 'round-1', hole_id: 'hole-1', hole_number: 1, throws: 4, approaches: 2, putts: 1 },
+                // hole 2: played, uncommitted.
+                { score_id: 's2', round_id: 'round-1', hole_id: 'hole-2', hole_number: 2, throws: 3, approaches: null, putts: null }
+                // holes 3-5: never played at all — must NOT count as unlogged.
+            ];
+
+            App.renderRoundScoreBar();
+
+            assertEqual(el('round-score-progress').textContent, '1 of 5 holes counted');
+            assertEqual(el('round-score-unlogged').textContent, ' · 1 unlogged', 'only the played-but-uncommitted hole counts as unlogged, not the three never-played holes');
         } finally {
             teardownDOM();
         }
