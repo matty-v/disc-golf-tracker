@@ -1328,6 +1328,14 @@ input[type="number"]::-webkit-inner-spin-button {
     color: var(--color-danger);
 }
 
+.comparison-result.best {
+    color: var(--color-warning);
+}
+
+.comparison-result.tied {
+    color: var(--color-info);
+}
+
 .summary-highlights {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -6,8 +6,8 @@
  * for API calls.
  */
 
-const STATIC_CACHE_NAME = 'disc-golf-static-v8';
-const DATA_CACHE_NAME = 'disc-golf-data-v8';
+const STATIC_CACHE_NAME = 'disc-golf-static-v9';
+const DATA_CACHE_NAME = 'disc-golf-data-v9';
 
 // Needed to know the backend API's origin for fetch routing below.
 importScripts('./js/config.js');

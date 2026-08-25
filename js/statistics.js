@@ -165,6 +165,53 @@ const Statistics = {
     },
 
     /**
+     * Compare current round total to the best completed round on record for
+     * this course. Callers must pass courseStats captured BEFORE the
+     * just-finished round was calculated in, so the round can never be
+     * compared against itself.
+     * @param {number} currentTotal - Current round total score
+     * @param {Object} courseStats - Course statistics (pre-existing bestRound)
+     * @returns {Object} Comparison result
+     */
+    comparePersonalBest(currentTotal, courseStats) {
+        if (!courseStats.hasData || !courseStats.bestRound) {
+            return {
+                hasComparison: false,
+                isNewBest: false,
+                isTied: false,
+                message: null
+            };
+        }
+
+        const bestTotal = courseStats.bestRound.totalScore;
+
+        if (currentTotal < bestTotal) {
+            return {
+                hasComparison: true,
+                isNewBest: true,
+                isTied: false,
+                message: 'New personal best!'
+            };
+        }
+
+        if (currentTotal === bestTotal) {
+            return {
+                hasComparison: true,
+                isNewBest: false,
+                isTied: true,
+                message: 'Tied your best!'
+            };
+        }
+
+        return {
+            hasComparison: true,
+            isNewBest: false,
+            isTied: false,
+            message: null
+        };
+    },
+
+    /**
      * Get best and worst holes from a round compared to averages
      * @param {Array} roundScores - Scores from the current round
      * @param {Array} holes - Holes for the course
