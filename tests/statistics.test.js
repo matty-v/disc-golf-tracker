@@ -323,6 +323,62 @@
     });
 
     // =========================================
+    // comparePersonalBest Tests (FAL-2)
+    // =========================================
+
+    test('comparePersonalBest reports no comparison for a course with no completed rounds', function() {
+        setupMocks();
+        try {
+            const courseStats = { hasData: false };
+            const result = Statistics.comparePersonalBest(50, courseStats);
+            assertFalse(result.hasComparison, 'hasComparison should be false');
+            assertFalse(result.isNewBest, 'isNewBest should be false');
+            assertFalse(result.isTied, 'isTied should be false');
+        } finally {
+            teardownMocks();
+        }
+    });
+
+    test('comparePersonalBest identifies a new personal best when strictly lower than bestRound', function() {
+        setupMocks();
+        try {
+            const courseStats = { hasData: true, bestRound: { totalScore: 60 } };
+            const result = Statistics.comparePersonalBest(55, courseStats);
+            assertTrue(result.hasComparison, 'hasComparison should be true');
+            assertTrue(result.isNewBest, 'isNewBest should be true');
+            assertFalse(result.isTied, 'isTied should be false');
+        } finally {
+            teardownMocks();
+        }
+    });
+
+    test('comparePersonalBest identifies a tie when equal to bestRound', function() {
+        setupMocks();
+        try {
+            const courseStats = { hasData: true, bestRound: { totalScore: 60 } };
+            const result = Statistics.comparePersonalBest(60, courseStats);
+            assertTrue(result.hasComparison, 'hasComparison should be true');
+            assertFalse(result.isNewBest, 'isNewBest should be false for a tie, not a new best');
+            assertTrue(result.isTied, 'isTied should be true');
+        } finally {
+            teardownMocks();
+        }
+    });
+
+    test('comparePersonalBest shows neither a new-best nor a tied message when worse than bestRound', function() {
+        setupMocks();
+        try {
+            const courseStats = { hasData: true, bestRound: { totalScore: 60 } };
+            const result = Statistics.comparePersonalBest(65, courseStats);
+            assertTrue(result.hasComparison, 'hasComparison should be true');
+            assertFalse(result.isNewBest, 'isNewBest should be false');
+            assertFalse(result.isTied, 'isTied should be false');
+        } finally {
+            teardownMocks();
+        }
+    });
+
+    // =========================================
     // calculateRunningTotal Tests
     // =========================================
 

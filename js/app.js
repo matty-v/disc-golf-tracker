@@ -1541,6 +1541,23 @@ const App = {
             Utils.toggleElement(comparisonSection, false);
         }
 
+        // Personal best (evaluated against courseStats as captured before
+        // this round started, so the just-finished round can't count as its
+        // own prior best)
+        const personalBestSection = document.getElementById('summary-personal-best');
+        const personalBest = this.state.courseStats
+            ? Statistics.comparePersonalBest(totals.totalScore, this.state.courseStats)
+            : { hasComparison: false };
+        if (personalBest.hasComparison && (personalBest.isNewBest || personalBest.isTied)) {
+            Utils.toggleElement(personalBestSection, true);
+
+            const personalBestEl = document.getElementById('personal-best-result');
+            personalBestEl.textContent = personalBest.message;
+            personalBestEl.className = `comparison-result ${personalBest.isNewBest ? 'best' : 'tied'}`;
+        } else {
+            Utils.toggleElement(personalBestSection, false);
+        }
+
         // Highlights
         const highlightsSection = document.getElementById('summary-highlights');
         if (Object.keys(this.state.holeStats).length > 0) {

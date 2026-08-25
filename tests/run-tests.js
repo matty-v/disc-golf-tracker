@@ -134,6 +134,9 @@ try {
     loadScript(path.join(testsDir, 'ui-behavior.test.js'));
     console.log('  Loaded: ui-behavior.test.js');
 
+    loadScript(path.join(testsDir, 'summary-personal-best.test.js'));
+    console.log('  Loaded: summary-personal-best.test.js');
+
     // Run tests
     context.TestRunner.run().then(results => {
         console.log('\n');
