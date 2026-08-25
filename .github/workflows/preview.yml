@@ -43,7 +43,7 @@ jobs:
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gac.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gac.json"
 
-          RESULT=$(npx firebase-tools@13.31.2 hosting:channel:list --project kinetic-object-322814 --json)
+          RESULT=$(npx firebase-tools@13.31.2 hosting:channel:list --project kinetic-object-322814 --site disc-golf-voget --json)
           STATUS=$(echo "$RESULT" | jq -r --arg cid "$CHANNEL_ID" \
             '.result.channels[]? | select(.name | endswith("/channels/" + $cid)) | .release.version.status // empty')
 
