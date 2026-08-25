@@ -6,8 +6,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   preview:
@@ -18,13 +16,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Firebase Preview Channel
+        id: deploy
+        continue-on-error: true
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseToolsVersion: 13.31.2
           projectId: kinetic-object-322814
           target: disc-golf-voget
           expires: 7d
+
+      # The action above intermittently reports failure from a crash in its own
+      # post-deploy bookkeeping (an internal firebase-tools call that fails to
+      # parse a non-JSON response) even when the channel deploy itself succeeded.
+      # Verify the channel independently so a real deploy failure still fails
+      # the job, instead of either trusting or blanket-ignoring the action's exit code.
+      - name: Verify preview channel is live
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          CHANNEL_ID="pr${PR_NUMBER}-${GITHUB_HEAD_REF:0:20}"
+          CHANNEL_ID=$(echo "$CHANNEL_ID" | sed -E 's/[^a-zA-Z0-9_.-]/_/g')
+          echo "Verifying channel: $CHANNEL_ID"
+
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gac.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gac.json"
+
+          RESULT=$(npx firebase-tools@13.31.2 hosting:channel:list --project kinetic-object-322814 --json)
+          STATUS=$(echo "$RESULT" | jq -r --arg cid "$CHANNEL_ID" \
+            '.result.channels[]? | select(.name | endswith("/channels/" + $cid)) | .release.version.status // empty')
+
+          if [ "$STATUS" != "FINALIZED" ]; then
+            echo "Preview channel $CHANNEL_ID is not live (status: '${STATUS:-missing}')."
+            echo "$RESULT"
+            exit 1
+          fi
+          echo "Preview channel $CHANNEL_ID verified live."
 
   cleanup:
     runs-on: ubuntu-latest
@@ -36,8 +64,8 @@ jobs:
       - name: Cleanup Firebase Preview Channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseToolsVersion: 13.31.2
           projectId: kinetic-object-322814
           target: disc-golf-voget
           expires: 0d
