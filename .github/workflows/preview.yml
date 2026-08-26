@@ -15,6 +15,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # FAL-3: captured BEFORE the deploy step runs, so the verify step below can
+      # tell "a release from this run" apart from a stale one still live on the
+      # channel from an earlier push. A 60s buffer absorbs clock skew between this
+      # runner and the Firebase Hosting API server.
+      - name: Record pre-deploy timestamp
+        id: pre_deploy
+        run: echo "epoch=$(date -u -d '-60 seconds' +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Firebase Preview Channel
         id: deploy
         continue-on-error: true
@@ -31,10 +39,17 @@ jobs:
       # parse a non-JSON response) even when the channel deploy itself succeeded.
       # Verify the channel independently so a real deploy failure still fails
       # the job, instead of either trusting or blanket-ignoring the action's exit code.
+      #
+      # FAL-3: "some release is FINALIZED on the channel" is not enough — the
+      # channel id is identical on every push and channels persist for 7 days, so
+      # a genuinely failed redeploy can still find an earlier push's still-live
+      # release. Also require the release's releaseTime to be no older than this
+      # run's own pre-deploy timestamp, so only a release THIS run produced counts.
       - name: Verify preview channel is live
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PRE_DEPLOY_EPOCH: ${{ steps.pre_deploy.outputs.epoch }}
         run: |
           CHANNEL_ID="pr${PR_NUMBER}-${GITHUB_HEAD_REF:0:20}"
           CHANNEL_ID=$(echo "$CHANNEL_ID" | sed -E 's/[^a-zA-Z0-9_.-]/_/g')
@@ -44,15 +59,32 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gac.json"
 
           RESULT=$(npx firebase-tools@13.31.2 hosting:channel:list --project kinetic-object-322814 --site disc-golf-voget --json)
-          STATUS=$(echo "$RESULT" | jq -r --arg cid "$CHANNEL_ID" \
-            '.result.channels[]? | select(.name | endswith("/channels/" + $cid)) | .release.version.status // empty')
+          CHANNEL=$(echo "$RESULT" | jq -c --arg cid "$CHANNEL_ID" \
+            '.result.channels[]? | select(.name | endswith("/channels/" + $cid))')
 
-          if [ "$STATUS" != "FINALIZED" ]; then
+          if [ -z "$CHANNEL" ]; then
+            echo "Preview channel $CHANNEL_ID not found."
+            echo "$RESULT"
+            exit 1
+          fi
+
+          STATUS=$(echo "$CHANNEL" | jq -r '.release.version.status // empty')
+          RELEASE_TIME=$(echo "$CHANNEL" | jq -r '.release.releaseTime // empty')
+
+          if [ "$STATUS" != "FINALIZED" ] || [ -z "$RELEASE_TIME" ]; then
             echo "Preview channel $CHANNEL_ID is not live (status: '${STATUS:-missing}')."
             echo "$RESULT"
             exit 1
           fi
-          echo "Preview channel $CHANNEL_ID verified live."
+
+          RELEASE_EPOCH=$(date -u -d "$RELEASE_TIME" +%s)
+          if [ "$RELEASE_EPOCH" -lt "$PRE_DEPLOY_EPOCH" ]; then
+            echo "Preview channel $CHANNEL_ID has a live release, but it predates this run's deploy (released $RELEASE_TIME) — this run's deploy did not produce a new release."
+            echo "$RESULT"
+            exit 1
+          fi
+
+          echo "Preview channel $CHANNEL_ID verified live from this run (released $RELEASE_TIME)."
 
   cleanup:
     runs-on: ubuntu-latest
@@ -61,11 +93,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # FAL-3: the action-based `expires: 0d` deploy 400s when the channel has
+      # already expired (7-day TTL) or was already cleaned up — which is the goal
+      # state a close-time cleanup is trying to reach, not a failure. Delete the
+      # channel directly and treat "already gone" as success; only a genuinely
+      # different error still fails the job.
       - name: Cleanup Firebase Preview Channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          firebaseToolsVersion: 13.31.2
-          projectId: kinetic-object-322814
-          target: disc-golf-voget
-          expires: 0d
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          CHANNEL_ID="pr${PR_NUMBER}-${GITHUB_HEAD_REF:0:20}"
+          CHANNEL_ID=$(echo "$CHANNEL_ID" | sed -E 's/[^a-zA-Z0-9_.-]/_/g')
+          echo "Deleting channel: $CHANNEL_ID"
+
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gac.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gac.json"
+
+          set +e
+          OUTPUT=$(npx firebase-tools@13.31.2 hosting:channel:delete "$CHANNEL_ID" \
+            --project kinetic-object-322814 --site disc-golf-voget --force 2>&1)
+          RESULT=$?
+          set -e
+          echo "$OUTPUT"
+
+          if [ "$RESULT" -eq 0 ]; then
+            echo "Channel $CHANNEL_ID deleted."
+            exit 0
+          fi
+
+          if echo "$OUTPUT" | grep -qiE 'not found|404|400'; then
+            echo "Channel $CHANNEL_ID was already gone (expired or previously cleaned up) — nothing to do."
+            exit 0
+          fi
+
+          echo "Channel $CHANNEL_ID delete failed for an unexpected reason."
+          exit "$RESULT"
