@@ -15,7 +15,7 @@ jobs:
       github.event.action != 'closed' && !startsWith(github.head_ref, 'security/sol-') && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # FAL-3: captured BEFORE the deploy step runs, so the verify step below can
       # tell "a release from this run" apart from a stale one still live on the
@@ -95,7 +95,7 @@ jobs:
       github.event.action == 'closed' && !startsWith(github.head_ref, 'security/sol-') && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # FAL-3: the action-based `expires: 0d` deploy 400s when the channel has
       # already expired (7-day TTL) or was already cleaned up — which is the goal
