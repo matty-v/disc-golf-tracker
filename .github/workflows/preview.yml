@@ -10,7 +10,9 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    if: github.event.action != 'closed'
+    # Sol security and dependency-update PRs use the independent test job.
+    if: >-
+      github.event.action != 'closed' && !startsWith(github.head_ref, 'security/sol-') && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,7 +90,9 @@ jobs:
 
   cleanup:
     runs-on: ubuntu-latest
-    if: github.event.action == 'closed'
+    # These PRs never create a preview channel, so they need no cleanup.
+    if: >-
+      github.event.action == 'closed' && !startsWith(github.head_ref, 'security/sol-') && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

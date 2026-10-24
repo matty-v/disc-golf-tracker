@@ -6,6 +6,9 @@ on:
 
 jobs:
   claude-review:
+    # Keep this rollout and bot updates off the metered AI review path.
+    if: >-
+      !startsWith(github.head_ref, 'security/sol-') && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
